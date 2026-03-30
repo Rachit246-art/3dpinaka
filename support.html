@@ -104,7 +104,7 @@
         <p style="color:#f8fafc; margin-top:1rem; opacity:0.9;">Our experts are 24/7 ready to assist you</p>
     </div>
 
-    <section class="section container" style="display:grid; grid-template-columns:1fr 1fr; gap:4rem;">
+    <section class="section container support-section">
         <div>
             <h2>Get in touch</h2>
             <p style="color:var(--text-muted); margin-bottom: 2rem;">Fill out the form below and we will contact you within 24 hours.</p>
@@ -112,15 +112,15 @@
             <form style="display:flex; flex-direction:column; gap:1.5rem;" onsubmit="event.preventDefault(); alert('Message sent!');">
                 <div>
                     <label style="font-weight:600; font-size:0.9rem;">Full Name</label>
-                    <input type="text" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; margin-top:5px;" required>
+                    <input type="text" style="width:100%; padding:10px; border:1px solid #94a3b8; background-color:#f1f5f9; border-radius:6px; margin-top:5px;" required>
                 </div>
                 <div>
                     <label style="font-weight:600; font-size:0.9rem;">Email Address</label>
-                    <input type="email" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; margin-top:5px;" required>
+                    <input type="email" style="width:100%; padding:10px; border:1px solid #94a3b8; background-color:#f1f5f9; border-radius:6px; margin-top:5px;" required>
                 </div>
                 <div>
                     <label style="font-weight:600; font-size:0.9rem;">Enquiry Type</label>
-                    <select style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; margin-top:5px;">
+                    <select style="width:100%; padding:10px; border:1px solid #94a3b8; background-color:#f1f5f9; border-radius:6px; margin-top:5px;">
                         <option>General Support</option>
                         <option>Bulk Enquiry</option>
                         <option>Printing Services</option>
@@ -129,7 +129,7 @@
                 </div>
                 <div>
                     <label style="font-weight:600; font-size:0.9rem;">Message</label>
-                    <textarea rows="5" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; margin-top:5px;" required></textarea>
+                    <textarea rows="5" style="width:100%; padding:10px; border:1px solid #94a3b8; background-color:#f1f5f9; border-radius:6px; margin-top:5px;" required></textarea>
                 </div>
                 <button type="submit" class="btn btn-primary" style="align-self:flex-start;">Submit Message</button>
             </form>
@@ -212,6 +212,37 @@
             </div>
         </div>
     </footer>
+    
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-bottom-nav">
+        <a href="index.html" class="mobile-nav-item active">
+            <i class="ph ph-squares-four"></i>
+            <span>Home</span>
+        </a>
+        <a href="login.html" class="mobile-nav-item">
+            <i class="ph ph-user"></i>
+            <span>Account</span>
+        </a>
+        <a href="products.html" class="mobile-nav-item">
+            <i class="ph ph-storefront"></i>
+            <span>Products</span>
+        </a>
+        <a href="javascript:void(0)" class="mobile-nav-item">
+            <div class="mobile-nav-icon-wrap">
+                <i class="ph ph-heart"></i>
+                <span class="mobile-nav-badge">0</span>
+            </div>
+            <span>Wishlist</span>
+        </a>
+        <a href="cart.html" class="mobile-nav-item">
+            <div class="mobile-nav-icon-wrap">
+                <i class="ph ph-shopping-bag"></i>
+                <span class="mobile-nav-badge">0</span>
+            </div>
+            <span>Cart</span>
+        </a>
+    </nav>
+
     <script src="js/main.js"></script>
     <a href="https://wa.me/1234567890" class="whatsapp-float" target="_blank"><i class="ph ph-whatsapp-logo"></i></a>
 </body>

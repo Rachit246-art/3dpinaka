@@ -994,3 +994,247 @@ footer {
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
   white-space: nowrap;
 }
+
+/* Support Section */
+.support-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem;
+}
+
+@media (max-width: 768px) {
+  .support-section {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+}
+
+/* Mobile Bottom Navigation & Header adjustments */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  body {
+    padding-bottom: 70px; /* Space for bottom nav */
+  }
+
+  /* WhatsApp Float positioning so it doesn't overlap bottom nav text completely */
+  .whatsapp-float {
+    bottom: 80px;
+  }
+
+  .mobile-bottom-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: var(--white);
+    border-top: 1px solid var(--border-color);
+    z-index: 1000;
+    padding: 10px 20px;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+  }
+  
+  .mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.65rem;
+    font-weight: 500;
+  }
+  
+  .mobile-nav-item.active {
+    color: var(--primary);
+  }
+  
+  .mobile-nav-item i {
+    font-size: 1.4rem;
+  }
+  
+  .mobile-nav-icon-wrap {
+    position: relative;
+    display: inline-flex;
+  }
+  
+  .mobile-nav-badge {
+    position: absolute;
+    top: -4px;
+    right: -6px;
+    background: var(--primary);
+    color: var(--dark-bg);
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+  }
+
+  /* Adjust top navbar to match exactly: Hamburger | Logo | Search+Cart */
+  .navbar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    padding: 1rem 15px;
+  }
+  
+  .nav-icons {
+    position: static;
+  }
+  
+  /* The hamburger menu button goes to far left */
+  .nav-icons > .menu-btn {
+    display: block;
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  /* The search bar goes to the right, adjacent to cart */
+  .nav-icons > i.ph-magnifying-glass {
+    position: absolute;
+    right: 55px; /* Offset to sit left of the cart */
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  /* The cart icon goes to the far right */
+  .nav-icons > .cart-icon-wrap {
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  
+  /* Hide the top heart icon since it's now in bottom bar */
+  .nav-icons > i.ph-heart {
+    display: none;
+  }
+}
+
+/* Mobile Offcanvas Menu */
+.mobile-offcanvas {
+  position: fixed;
+  top: 0;
+  left: -320px;
+  width: 320px;
+  height: 100vh;
+  background-color: var(--white);
+  z-index: 9999;
+  transition: left 0.3s ease;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.mobile-offcanvas.open {
+  left: 0;
+}
+.mobile-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  background: rgba(0,0,0,0.5);
+  z-index: 9998;
+  display: none;
+}
+.mobile-menu-overlay.open {
+  display: block;
+}
+.mobile-menu-header {
+  padding: 1.5rem 1rem 1rem;
+  display: flex;
+  justify-content: flex-start;
+}
+.close-menu-btn {
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-dark);
+}
+.mobile-menu-actions {
+  display: flex;
+  gap: 10px;
+  padding: 0 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+.menu-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  background-color: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-dark);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+}
+.mobile-menu-list {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+.mobile-menu-list > li {
+  border-bottom: 1px solid var(--border-color);
+}
+.mobile-menu-list a, .menu-dropdown-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.2rem 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  cursor: pointer;
+}
+.menu-dropdown-items {
+  display: none;
+  background-color: var(--white);
+  padding: 0 0 0 1.5rem;
+}
+.has-dropdown.active .menu-dropdown-items {
+  display: block;
+}
+.menu-dropdown-items a {
+  padding: 1rem 1rem;
+  font-weight: 500;
+  font-size: 0.9rem;
+  border-bottom: none;
+}
+.menu-dropdown-items li {
+  border-bottom: 1px solid var(--border-color);
+}
+.menu-dropdown-items li:last-child {
+  border-bottom: none;
+}
+.mobile-menu-footer {
+  padding: 2rem 1rem;
+  margin-top: auto;
+}
+.mobile-menu-footer strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+  color: var(--text-dark);
+}
+.mobile-menu-footer p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}

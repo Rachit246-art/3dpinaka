@@ -4,16 +4,117 @@ document.addEventListener('DOMContentLoaded', () => {
     const navLinks = document.querySelector('.nav-links');
     
     if(menuBtn) {
+        // Inject Mobile Menu HTML
+        const mobileMenuHTML = `
+        <div class="mobile-menu-overlay" id="mobileMenuOverlay"></div>
+        <div class="mobile-offcanvas" id="mobileMenu">
+          <div class="mobile-menu-header">
+             <i class="ph ph-x close-menu-btn" id="closeMenuBtn"></i>
+          </div>
+          <div class="mobile-menu-actions">
+             <button class="menu-action-btn" onclick="window.location.href='login.html'"><i class="ph ph-user"></i> Login</button>
+             <button class="menu-action-btn" onclick="window.location.href='cart.html'"><i class="ph ph-heart"></i> Wishlist</button>
+          </div>
+          <ul class="mobile-menu-list">
+             <li><a href="index.html">Home</a></li>
+             <li><a href="products.html">Brands</a></li>
+             <li class="has-dropdown">
+                 <div class="menu-dropdown-toggle">Categories <i class="ph ph-plus"></i></div>
+                 <ul class="menu-dropdown-items">
+                     <li><a href="products.html?category=3D%20Printer">3D Printer</a></li>
+                     <li><a href="products.html?category=Laser%20Engraver">Laser Engraver</a></li>
+                     <li><a href="products.html?category=Food%20Printer">Food Printer</a></li>
+                     <li><a href="products.html?category=3D%20Scanner">3D Scanner</a></li>
+                     <li><a href="products.html?category=CNC%20Router">CNC Router</a></li>
+                     <li><a href="products.html?category=Robotics">Robotics</a></li>
+                     <li><a href="products.html?category=3D%20Pens">3D Pens</a></li>
+                     <li><a href="products.html?category=Filaments">Filaments</a></li>
+                     <li><a href="products.html?category=Resins">Resins</a></li>
+                     <li><a href="products.html?category=Spare%20Parts">Spare Parts</a></li>
+                     <li><a href="products.html?category=Accessories">Accessories</a></li>
+                 </ul>
+             </li>
+             <li class="has-dropdown">
+                 <div class="menu-dropdown-toggle">3 Idea Exclusive <i class="ph ph-plus"></i></div>
+                 <ul class="menu-dropdown-items">
+                     <li><a href="anycubic.html">Anycubic Kobra 2 Neo 3D Printer</a></li>
+                     <li><a href="anycubic.html">Anycubic Photon Mono 4 3D Printer</a></li>
+                     <li><a href="anycubic.html">Anycubic Kobra 3 3D Printer</a></li>
+                     <li><a href="snapmaker.html">Snapmaker Artisan 3-In-1 3D Printer</a></li>
+                     <li><a href="rotrics.html">Rotrics DexArm Hyper Luxury Kit</a></li>
+                 </ul>
+             </li>
+             <li class="has-dropdown">
+                 <div class="menu-dropdown-toggle">Material <i class="ph ph-plus"></i></div>
+                 <ul class="menu-dropdown-items">
+                     <li><a href="materials.html">All Materials</a></li>
+                 </ul>
+             </li>
+             <li class="has-dropdown">
+                 <div class="menu-dropdown-toggle">Bulk Enquiry <i class="ph ph-plus"></i></div>
+                 <ul class="menu-dropdown-items">
+                     <li><a href="support.html">Contact Form</a></li>
+                 </ul>
+             </li>
+             <li class="has-dropdown">
+                 <div class="menu-dropdown-toggle">Refurbished Store <i class="ph ph-plus"></i></div>
+                 <ul class="menu-dropdown-items">
+                     <li><a href="products.html">View Refurbished</a></li>
+                 </ul>
+             </li>
+             <li><a href="support.html">Printing Services</a></li>
+             <li><a href="support.html">Support</a></li>
+          </ul>
+          <div class="mobile-menu-footer">
+             <strong>Need Help?</strong>
+             <p>10th Floor, Times Tower, Kamala City, Senapati Bapat Marg, Lower Parel West, Mumbai, Maharashtra 400013</p>
+          </div>
+        </div>
+        `;
+        if(!document.getElementById('mobileMenu')) {
+            document.body.insertAdjacentHTML('beforeend', mobileMenuHTML);
+        }
+
+        const mobileMenu = document.getElementById('mobileMenu');
+        const overlay = document.getElementById('mobileMenuOverlay');
+        const closeBtn = document.getElementById('closeMenuBtn');
+
+        const openMenu = () => {
+            mobileMenu.classList.add('open');
+            overlay.classList.add('open');
+            document.body.style.overflow = 'hidden';
+        };
+
+        const closeMenu = () => {
+            mobileMenu.classList.remove('open');
+            overlay.classList.remove('open');
+            document.body.style.overflow = '';
+        };
+
         menuBtn.addEventListener('click', () => {
-            navLinks.style.display = navLinks.style.display === 'flex' ? 'none' : 'flex';
-            navLinks.style.flexDirection = 'column';
-            navLinks.style.position = 'absolute';
-            navLinks.style.top = '100%';
-            navLinks.style.left = '0';
-            navLinks.style.width = '100%';
-            navLinks.style.background = '#fff';
-            navLinks.style.padding = '1rem';
-            navLinks.style.boxShadow = '0 10px 15px -3px rgba(0,0,0,0.1)';
+             if(navLinks) navLinks.style.display = '';
+             openMenu();
+        });
+        
+        closeBtn.addEventListener('click', closeMenu);
+        overlay.addEventListener('click', closeMenu);
+
+        // Accordion functionality for dropdowns
+        document.querySelectorAll('.menu-dropdown-toggle').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const parent = e.target.closest('.has-dropdown');
+                parent.classList.toggle('active');
+                const icon = parent.querySelector('.ph-plus, .ph-minus');
+                if(icon) {
+                    if(parent.classList.contains('active')) {
+                        icon.classList.remove('ph-plus');
+                        icon.classList.add('ph-minus');
+                    } else {
+                        icon.classList.remove('ph-minus');
+                        icon.classList.add('ph-plus');
+                    }
+                }
+            });
         });
     }
 
