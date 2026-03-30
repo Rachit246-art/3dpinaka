@@ -113,6 +113,11 @@
 
     <script src="js/main.js"></script>
     <script>
+        function updateBadgeSafe() {
+            const num = (JSON.parse(localStorage.getItem('cart')) || []).length;
+            document.querySelectorAll('.cart-badge').forEach(b => b.innerText = num);
+        }
+
         function renderCart() {
             const container = document.getElementById('cart-items');
             const actions = document.getElementById('cart-actions');
@@ -150,15 +155,13 @@
             let cartItems = JSON.parse(localStorage.getItem('cart')) || [];
             cartItems.splice(index, 1);
             localStorage.setItem('cart', JSON.stringify(cartItems));
-            cart = cartItems; 
-            if(typeof updateCartBadge === 'function') updateCartBadge();
+            updateBadgeSafe();
             renderCart();
         }
 
         function clearCart() {
             localStorage.removeItem('cart');
-            cart = []; 
-            updateCartBadge();
+            updateBadgeSafe();
             renderCart();
         }
 
