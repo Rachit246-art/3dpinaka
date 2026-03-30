@@ -4,6 +4,12 @@ if (window.performance && window.performance.getEntriesByType('navigation').leng
         const path = window.location.pathname;
         if (!path.endsWith('index.html') && path !== '/' && path !== '') {
             window.location.href = 'index.html';
+        } else {
+            // Already on index.html, force scroll to top (Hero Section)
+            if ('scrollRestoration' in history) {
+                history.scrollRestoration = 'manual';
+            }
+            window.scrollTo(0, 0);
         }
     }
 }
