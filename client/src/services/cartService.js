@@ -82,6 +82,11 @@ export const cartService = {
     window.dispatchEvent(new Event('storage'));
   },
 
+  isInWishlist: (productTitle) => {
+    const items = getFromStorage('wishlist');
+    return items.some(item => item.title === productTitle);
+  },
+
   // --- Initial Sync ---
   notifyAll: () => {
     window.dispatchEvent(new Event(CART_UPDATED));

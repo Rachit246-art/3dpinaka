@@ -82,6 +82,15 @@ const Home = () => {
     }
   };
 
+  const [wishlist, setWishlist] = useState([]);
+
+  useEffect(() => {
+    const updateWishlist = () => setWishlist(cartService.getWishlistItems());
+    updateWishlist();
+    window.addEventListener('wishlistUpdated', updateWishlist);
+    return () => window.removeEventListener('wishlistUpdated', updateWishlist);
+  }, []);
+
   const handleAddToCart = (product) => {
     cartService.addToCart(product);
   };
@@ -200,11 +209,11 @@ const Home = () => {
             {PRODUCTS.slice(0, 4).map((product, index) => (
                 <div key={product.id} className="product-card reveal" ref={addToRevealRefs}>
                     <button 
-                        className="wishlist-btn" 
+                        className={`wishlist-btn ${wishlist.some(item => item.title === product.title) ? 'active' : ''}`} 
                         onClick={() => handleAddToWishlist(product)}
                         title="Add to Wishlist"
                     >
-                        <Heart size={20} weight="bold" />
+                        <Heart size={20} weight={wishlist.some(item => item.title === product.title) ? "fill" : "bold"} />
                     </button>
                     <div className="badge" style={product.badgeStyle}>{product.badge || (index === 0 ? 'Best Seller' : index === 1 ? 'New Arrival' : index === 2 ? 'Popular' : 'Premium')}</div>
                     <img src={product.image} alt={product.title} className="product-img" />

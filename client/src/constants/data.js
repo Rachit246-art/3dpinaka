@@ -20,20 +20,20 @@ export const PRODUCTS = [
   },
   {
     id: 3,
-    title: "Creality Ender-3 V3",
-    price: "₹28,999",
+    title: "Creality K1C 3D Printer",
+    price: "₹52,999",
     category: "FDM Printer",
-    image: "https://images.unsplash.com/photo-1627389955800-410a4db687a4?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
-    stars: "★★★★★ (4.7)",
+    image: "/images/Creality K1C 3D Printer.png",
+    stars: "★★★★★ (4.9)",
     badge: "Popular",
     badgeStyle: { background: "#10b981", color: "white" }
   },
   {
     id: 4,
-    title: "Snapmaker J1 IDEX",
-    price: "₹2,49,999",
-    category: "Industrial Grade",
-    image: "https://images.unsplash.com/photo-1616423985397-6a97851da034?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80",
+    title: "Snapmaker 2.0 A350T",
+    price: "₹1,99,000",
+    category: "3-in-1 Printer",
+    image: "/images/Snapmaker 2.0 A350T 3-in-1 3D Printer.png",
     stars: "★★★★★ (5.0)",
     badge: "Premium",
     badgeStyle: { background: "#f97316", color: "white" }

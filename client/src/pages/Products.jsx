@@ -43,11 +43,26 @@ const Products = () => {
     const [sortBy, setSortBy] = useState('best');
     const [sortOpen, setSortOpen] = useState(false);
     
-    // Filters from URL or state
-    const [selectedBrands, setSelectedBrands] = useState(searchParams.get('brand') ? searchParams.get('brand').split(',') : []);
-    const [selectedCats, setSelectedCats] = useState(searchParams.get('category') ? searchParams.get('category').split(',') : []);
+    // Filters - synced with URL
+    const selectedBrands = useMemo(() => searchParams.get('brand') ? searchParams.get('brand').split(',') : [], [searchParams]);
+    const selectedCats = useMemo(() => searchParams.get('category') ? searchParams.get('category').split(',') : [], [searchParams]);
+    const [availabilityFilter, setAvailabilityFilter] = useState([]);
     const [minPrice, setMinPrice] = useState(0);
     const [maxPriceVal, setMaxPriceVal] = useState(1000000);
+
+    const toggleBrand = (brand) => {
+        const next = selectedBrands.includes(brand) ? selectedBrands.filter(b => b !== brand) : [...selectedBrands, brand];
+        if (next.length > 0) searchParams.set('brand', next.join(','));
+        else searchParams.delete('brand');
+        setSearchParams(searchParams);
+    };
+
+    const toggleCat = (cat) => {
+        const next = selectedCats.includes(cat) ? selectedCats.filter(c => c !== cat) : [...selectedCats, cat];
+        if (next.length > 0) searchParams.set('category', next.join(','));
+        else searchParams.delete('category');
+        setSearchParams(searchParams);
+    };
 
     const parsePriceLocal = (p) => parseInt(p.replace(/[^0-9]/g, '')) || 0;
     const realMaxPrice = useMemo(() => Math.max(...ALL_PRODUCTS.map(p => parsePriceLocal(p.price)), 1000000), []);
@@ -58,35 +73,17 @@ const Products = () => {
         setMinPrice(realMinPrice);
     }, [realMaxPrice, realMinPrice]);
 
-    useEffect(() => {
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('active');
-                }
-            });
-        }, { threshold: 0.1 });
-
-        revealRefs.current.forEach(el => el && observer.observe(el));
-        return () => observer.disconnect();
-    }, []);
-
-    const addToRevealRefs = (el) => {
-        if (el && !revealRefs.current.includes(el)) {
-            revealRefs.current.push(el);
-        }
-    };
-
-    const handleAddToCart = (product) => {
-        cartService.addToCart(product);
-    };
-
-    const handleAddToWishlist = (product) => {
-        cartService.addToWishlist(product);
-    };
-
     const products = useMemo(() => {
         let filtered = [...ALL_PRODUCTS];
+
+        if (availabilityFilter.length > 0) {
+            filtered = filtered.filter(p => {
+                if (availabilityFilter.includes('in') && availabilityFilter.includes('out')) return true;
+                if (availabilityFilter.includes('in')) return p.inStock;
+                if (availabilityFilter.includes('out')) return !p.inStock;
+                return true;
+            });
+        }
 
         if (selectedBrands.length > 0) {
             filtered = filtered.filter(p => selectedBrands.some(b => p.title.toLowerCase().includes(b.toLowerCase())));
@@ -108,14 +105,6 @@ const Products = () => {
             return pr >= minPrice && pr <= maxPriceVal;
         });
 
-        const SORT_OPTIONS = [
-            { label: 'Best selling', value: 'best' },
-            { label: 'Alphabetically, A-Z', value: 'az' },
-            { label: 'Alphabetically, Z-A', value: 'za' },
-            { label: 'Price, low to high', value: 'price_asc' },
-            { label: 'Price, high to low', value: 'price_desc' },
-        ];
-
         switch (sortBy) {
             case 'az': filtered.sort((a, b) => a.title.localeCompare(b.title)); break;
             case 'za': filtered.sort((a, b) => b.title.localeCompare(a.title)); break;
@@ -125,29 +114,67 @@ const Products = () => {
         }
 
         return filtered;
-    }, [selectedBrands, selectedCats, minPrice, maxPriceVal, sortBy]);
+    }, [selectedBrands, selectedCats, minPrice, maxPriceVal, sortBy, availabilityFilter]);
 
-    const toggleBrand = (brand) => setSelectedBrands(prev => prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand]);
-    const toggleCat = (cat) => setSelectedCats(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
-    
-    const categoriesList = ['3D Printer', 'Laser Engraver', 'Food Printer', '3D Scanner', 'CNC Router', 'Robotics', '3D Pens', 'Filaments', 'Resins', 'Spare Parts', 'Accessories'];
+    useEffect(() => {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                }
+            });
+        }, { threshold: 0.1 });
+
+        const timer = setTimeout(() => {
+            revealRefs.current.forEach(el => {
+                if (el) {
+                    el.classList.remove('active');
+                    observer.observe(el);
+                }
+            });
+        }, 50);
+
+        return () => {
+            clearTimeout(timer);
+            observer.disconnect();
+        };
+    }, [products]);
+
+    const [wishlist, setWishlist] = useState([]);
+    useEffect(() => {
+        const updateWishlist = () => setWishlist(cartService.getWishlistItems());
+        updateWishlist();
+        window.addEventListener('wishlistUpdated', updateWishlist);
+        return () => window.removeEventListener('wishlistUpdated', updateWishlist);
+    }, []);
+
+    const addToRevealRefs = (el) => {
+        if (el && !revealRefs.current.includes(el)) {
+            revealRefs.current.push(el);
+        }
+    };
 
     const activeTags = [
         ...selectedBrands.map(b => ({ type: 'brand', value: b, label: `Brand: ${b}` })),
-        ...selectedCats.map(c => ({ type: 'cat', value: c, label: `Category: ${c}` }))
+        ...selectedCats.map(c => ({ type: 'cat', value: c, label: `Category: ${c}` })),
+        ...availabilityFilter.map(a => ({ type: 'availability', value: a, label: `Availability: ${a === 'in' ? 'In stock' : 'Out of stock'}` }))
     ];
 
     const removeTag = (tag) => {
         if (tag.type === 'brand') toggleBrand(tag.value);
         if (tag.type === 'cat') toggleCat(tag.value);
+        if (tag.type === 'availability') setAvailabilityFilter(prev => prev.filter(v => v !== tag.value));
     };
 
     const clearAll = () => {
         setSelectedBrands([]);
         setSelectedCats([]);
+        setAvailabilityFilter([]);
         setMinPrice(realMinPrice);
         setMaxPriceVal(realMaxPrice);
     };
+
+    revealRefs.current = [];
 
     return (
         <main>
@@ -201,6 +228,19 @@ const Products = () => {
                     {showFilter && (
                         <aside className="filter-sidebar">
                             <div className="filter-section">
+                                <div className="filter-section-header">
+                                    <h4>Availability</h4>
+                                </div>
+                                <label className="filter-checkbox">
+                                    <input type="checkbox" checked={availabilityFilter.includes('in')} onChange={() => setAvailabilityFilter(prev => prev.includes('in') ? prev.filter(v => v !== 'in') : [...prev, 'in'])} />
+                                    <span>In Stock</span>
+                                </label>
+                                <label className="filter-checkbox">
+                                    <input type="checkbox" checked={availabilityFilter.includes('out')} onChange={() => setAvailabilityFilter(prev => prev.includes('out') ? prev.filter(v => v !== 'out') : [...prev, 'out'])} />
+                                    <span>Out Of Stock</span>
+                                </label>
+                            </div>
+                            <div className="filter-section">
                                 <div className="filter-section-header"><h4>Brand</h4></div>
                                 <div className="filter-scroll-area">
                                     {BRANDS.map(b => (
@@ -237,11 +277,11 @@ const Products = () => {
                         {products.length > 0 ? products.map((product) => (
                             <div key={product.id} className={`product-card reveal ${!product.inStock ? 'sold-out' : ''}`} ref={addToRevealRefs}>
                                 <button 
-                                    className="wishlist-btn" 
-                                    onClick={() => handleAddToWishlist(product)}
+                                    className={`wishlist-btn ${wishlist.some(item => item.title === product.title) ? 'active' : ''}`} 
+                                    onClick={() => cartService.addToWishlist(product)}
                                     title="Add to Wishlist"
                                 >
-                                    <Heart size={20} weight="bold" />
+                                    <Heart size={20} weight={wishlist.some(item => item.title === product.title) ? "fill" : "bold"} />
                                 </button>
                                 {product.badge && (
                                     <div className="badge" style={product.badgeStyle}>{product.badge}</div>
@@ -264,7 +304,7 @@ const Products = () => {
                                         {!product.inStock && <span className="out-of-stock-label">Out Of Stock</span>}
                                     </div>
                                     {product.inStock ? (
-                                        <button className="btn btn-block" onClick={() => handleAddToCart(product)}>Add to Cart</button>
+                                        <button className="btn btn-block" onClick={() => cartService.addToCart(product)}>Add to Cart</button>
                                     ) : (
                                         <button className="btn btn-block" disabled style={{ background: '#94a3b8', color: 'white', cursor: 'not-allowed' }}>Out of Stock</button>
                                     )}

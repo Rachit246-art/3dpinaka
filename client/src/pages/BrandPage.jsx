@@ -13,57 +13,72 @@ import { ZMORPH_PRODUCTS } from '../constants/zmorph_data';
 import { ELEGOO_PRODUCTS } from '../constants/elegoo_data';
 import { cartService } from '../services/cartService';
 
-const BrandProductCard = ({ product, revealRef }) => (
-    <div className={`brand-product-card reveal ${!product.inStock ? 'sold-out' : ''}`} ref={revealRef}>
-        <div className="badges-row">
-            {product.badges?.map((b, i) => (
-                <span key={i} className={`mini-badge ${b}`}>
-                    {b === 'sale' ? 'Sale' : b === 'flash' ? 'Flash Sale' : b === 'top' ? 'Top' : b === 'pre' ? 'Pre Order' : b === 'new' ? 'New' : b === 'clearance' ? 'Clearance' : b}
-                </span>
-            ))}
-        </div>
-        <div className="image-wrapper">
-            <img src={product.image} alt={product.title} className="product-img" />
-            {!product.inStock && (
-                <div className="sold-out-overlay">
-                    <div className="sold-out-circle">Sold Out</div>
-                </div>
-            )}
-        </div>
-        <div className="content">
-            <h3 className="title">{product.title}</h3>
-            <div className="reviews">
-                <span className="stars">{product.stars.split(' ')[0]}</span>
-                <span className="review-count">{product.stars.split(' ')[1]}</span>
-            </div>
-            <div className="spec-grid">
-                {product.specs.map((spec, i) => (
-                    <div key={i} className="spec-item">
-                        <span className="spec-label">{spec.label}</span>
-                        <span className="spec-value">{spec.value}</span>
-                    </div>
+const BrandProductCard = ({ product, revealRef }) => {
+    const [isInWishlist, setIsInWishlist] = useState(cartService.isInWishlist(product.title));
+
+    useEffect(() => {
+        const checkWishlist = () => setIsInWishlist(cartService.isInWishlist(product.title));
+        window.addEventListener('wishlistUpdated', checkWishlist);
+        return () => window.removeEventListener('wishlistUpdated', checkWishlist);
+    }, [product.title]);
+
+    return (
+        <div className={`brand-product-card reveal ${!product.inStock ? 'sold-out' : ''}`} ref={revealRef}>
+            <div className="badges-row">
+                {product.badges?.map((b, i) => (
+                    <span key={i} className={`mini-badge ${b}`}>
+                        {b === 'sale' ? 'Sale' : b === 'flash' ? 'Flash Sale' : b === 'top' ? 'Top' : b === 'pre' ? 'Pre Order' : b === 'new' ? 'New' : b === 'clearance' ? 'Clearance' : b}
+                    </span>
                 ))}
             </div>
-            <div className="footer">
-                <div className="price-section">
-                    <span className="current-price">{product.price}</span>
-                    {product.oldPrice && <span className="old-price">{product.oldPrice}</span>}
-                    {!product.inStock && <span className="out-of-stock-label">Out Of Stock</span>}
+            <div className="image-wrapper">
+                <img src={product.image} alt={product.title} className="product-img" />
+                {!product.inStock && (
+                    <div className="sold-out-overlay">
+                        <div className="sold-out-circle">Sold Out</div>
+                    </div>
+                )}
+            </div>
+            <div className="content">
+                <h3 className="title">{product.title}</h3>
+                <div className="reviews">
+                    <span className="stars">{product.stars.split(' ')[0]}</span>
+                    <span className="review-count">{product.stars.split(' ')[1]}</span>
                 </div>
-                {product.inStock ? (
-                    <>
-                        <button className="add-cart-btn" onClick={() => cartService.addToCart(product)} title="Add to Cart">
-                            <ShoppingCart size={22} weight="bold" />
-                        </button>
-                        <button className="add-cart-btn" onClick={() => cartService.addToWishlist(product)} style={{ marginLeft: '10px' }} title="Add to Wishlist">
-                            <Heart size={22} weight="bold" />
-                        </button>
-                    </>
-                ) : null}
+                <div className="spec-grid">
+                    {product.specs.map((spec, i) => (
+                        <div key={i} className="spec-item">
+                            <span className="spec-label">{spec.label}</span>
+                            <span className="spec-value">{spec.value}</span>
+                        </div>
+                    ))}
+                </div>
+                <div className="footer">
+                    <div className="price-section">
+                        <span className="current-price">{product.price}</span>
+                        {product.oldPrice && <span className="old-price">{product.oldPrice}</span>}
+                        {!product.inStock && <span className="out-of-stock-label">Out Of Stock</span>}
+                    </div>
+                    {product.inStock ? (
+                        <>
+                            <button className="add-cart-btn" onClick={() => cartService.addToCart(product)} title="Add to Cart">
+                                <ShoppingCart size={22} weight="bold" />
+                            </button>
+                            <button 
+                                className={`add-cart-btn wishlist-btn ${isInWishlist ? 'active' : ''}`} 
+                                onClick={() => cartService.addToWishlist(product)} 
+                                style={{ marginLeft: '10px' }} 
+                                title="Add to Wishlist"
+                            >
+                                <Heart size={22} weight={isInWishlist ? "fill" : "bold"} />
+                            </button>
+                        </>
+                    ) : null}
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 const SORT_OPTIONS = [
     { label: 'Best selling', value: 'best' },
@@ -94,7 +109,6 @@ const BrandPage = () => {
     const isSnapmaker = effectiveBrandName.toLowerCase() === 'snapmaker';
     const isRotrics = effectiveBrandName.toLowerCase() === 'rotrics';
     const isFlashforge = effectiveBrandName.toLowerCase() === 'flashforge';
-    const isSkriware = effectiveBrandName.toLowerCase() === 'skriware';
     const isMagforms = effectiveBrandName.toLowerCase() === 'magforms';
     const isZmorph = effectiveBrandName.toLowerCase() === 'zmorph';
     const isElegoo = effectiveBrandName.toLowerCase() === 'elegoo';
@@ -107,18 +121,23 @@ const BrandPage = () => {
         if (allProducts.length > 0) {
             setMinPrice(realMinPrice);
             setMaxPriceVal(realMaxPrice);
+            setAvailabilityFilter([]); // Reset filters when brand changes
+            setSortBy('best');
         }
     }, [allProducts, realMaxPrice, realMinPrice]);
 
-    const showOutOfStockMsg = availabilityFilter.length === 1 && availabilityFilter.includes('out');
-
     const products = useMemo(() => {
-        if (showOutOfStockMsg) return [];
         let filtered = [...allProducts];
-        
-        // Availability Logic: If both or none selected, show all. If only 'in' selected, show all (since all are in stock).
-        // If only 'out' selected, show none (handled by showOutOfStockMsg).
-        
+
+        if (availabilityFilter.length > 0) {
+            filtered = filtered.filter(p => {
+                if (availabilityFilter.includes('in') && availabilityFilter.includes('out')) return true;
+                if (availabilityFilter.includes('in')) return p.inStock;
+                if (availabilityFilter.includes('out')) return !p.inStock;
+                return true;
+            });
+        }
+
         filtered = filtered.filter(p => {
             const pr = parsePrice(p.price);
             return pr >= minPrice && pr <= maxPriceVal;
@@ -132,7 +151,7 @@ const BrandPage = () => {
             default: break;
         }
         return filtered;
-    }, [allProducts, minPrice, maxPriceVal, sortBy, showOutOfStockMsg]);
+    }, [allProducts, minPrice, maxPriceVal, sortBy, availabilityFilter]);
 
     const activeTags = availabilityFilter.map(a => ({
         type: 'availability', value: a,
@@ -165,12 +184,13 @@ const BrandPage = () => {
         }
     };
 
-    // Reset refs list on each render so stale nodes don't accumulate
     revealRefs.current = [];
 
     const toggleAvailability = (val) => setAvailabilityFilter(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
     const removeTag = (tag) => { if (tag.type === 'availability') setAvailabilityFilter(prev => prev.filter(v => v !== tag.value)); };
     const clearAll = () => { setAvailabilityFilter([]); setMinPrice(realMinPrice); setMaxPriceVal(realMaxPrice); };
+
+    const showOutOfStockMsg = availabilityFilter.length === 1 && availabilityFilter.includes('out') && !products.some(p => !p.inStock);
 
     return (
         <main>
@@ -220,17 +240,15 @@ const BrandPage = () => {
                             <aside className="filter-sidebar">
                                 <div className="filter-section">
                                     <div className="filter-section-header">
-                                        <h4>Availability <span className="filter-count-badge">2</span></h4>
+                                        <h4>Availability</h4>
                                     </div>
                                     <label className="filter-checkbox">
                                         <input type="checkbox" checked={availabilityFilter.includes('in')} onChange={() => toggleAvailability('in')} />
                                         <span>In Stock</span>
-                                        <span className="filter-item-count">{allProducts.length}</span>
                                     </label>
                                     <label className="filter-checkbox">
                                         <input type="checkbox" checked={availabilityFilter.includes('out')} onChange={() => toggleAvailability('out')} />
                                         <span>Out Of Stock</span>
-                                        <span className="filter-item-count">0</span>
                                     </label>
                                 </div>
 
@@ -256,13 +274,7 @@ const BrandPage = () => {
                         )}
 
                         <div className={`brand-product-grid ${showFilter ? '' : 'full-width'}`}>
-                            {showOutOfStockMsg ? (
-                                <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem', background: '#f0fdf4', borderRadius: '12px', border: '1px solid #bbf7d0' }}>
-                                    <p style={{ fontSize: '1.2rem', fontWeight: 600, color: '#16a34a', marginBottom: '0.5rem' }}>🎉 Great news!</p>
-                                    <p style={{ color: '#15803d' }}>Everything is currently in stock. All {allProducts.length} products are available for purchase!</p>
-                                    <button className="btn btn-primary" style={{ marginTop: '1.5rem' }} onClick={clearAll}>View All Products</button>
-                                </div>
-                            ) : products.length > 0 ? products.map((product) => (
+                            {products.length > 0 ? products.map((product) => (
                                 <BrandProductCard key={`${product.id}-${sortBy}`} product={product} revealRef={addToRevealRefs} />
                             )) : (
                                 <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>

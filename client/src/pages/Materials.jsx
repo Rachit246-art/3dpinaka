@@ -26,6 +26,15 @@ const Materials = () => {
         }
     };
 
+    const [wishlist, setWishlist] = React.useState([]);
+
+    useEffect(() => {
+        const updateWishlist = () => setWishlist(cartService.getWishlistItems());
+        updateWishlist();
+        window.addEventListener('wishlistUpdated', updateWishlist);
+        return () => window.removeEventListener('wishlistUpdated', updateWishlist);
+    }, []);
+
     const handleAddToCart = (item) => {
         cartService.addToCart(item);
     };
@@ -47,11 +56,11 @@ const Materials = () => {
                     {MATERIALS.map((item) => (
                         <div key={item.id} className="product-card reveal" ref={addToRevealRefs}>
                             <button 
-                                className="wishlist-btn" 
+                                className={`wishlist-btn ${wishlist.some(w => w.title === item.title) ? 'active' : ''}`} 
                                 onClick={() => handleAddToWishlist(item)}
                                 title="Add to Wishlist"
                             >
-                                <Heart size={20} weight="bold" />
+                                <Heart size={20} weight={wishlist.some(w => w.title === item.title) ? "fill" : "bold"} />
                             </button>
                             <img src={item.image} alt={item.title} className="product-img" />
                             <div className="product-info">
