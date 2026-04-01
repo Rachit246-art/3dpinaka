@@ -2210,3 +2210,68 @@ footer {
         line-height: 1.6 !important;
     }
 }
+
+/* Printing Services Responsive Styles */
+.calculator-main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 2.5rem;
+    align-items: start;
+}
+
+.step-bar-container {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-bottom: 4rem;
+    overflow-x: auto;
+    padding-bottom: 10px;
+}
+
+@media (max-width: 1024px) {
+    .calculator-main-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .printing-services-page {
+        padding: 2rem 0 !important;
+    }
+    .printing-services-page h1 {
+        font-size: 1.8rem !important;
+    }
+    .step-bar-container {
+        gap: 1rem;
+        justify-content: space-between;
+    }
+    .step-divider {
+        display: none !important;
+    }
+    .step-item div {
+        font-size: 0.85rem !important;
+    }
+    .options-selection-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    .material-selection-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    .policy-grid {
+        grid-template-columns: 1fr !important;
+        gap: 1.5rem !important;
+    }
+}
+
+/* Updated Policy Grid for 4 cards */
+@media (max-width: 1200px) {
+    .policy-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+@media (max-width: 640px) {
+    .policy-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
