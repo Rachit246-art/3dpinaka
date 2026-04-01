@@ -20,16 +20,16 @@ const MobileNav = ({ user, isOpen, onClose, activeDropdowns, toggleDropdown, car
           {user ? (
             <div className="menu-user-info" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 1rem 1.5rem', borderBottom: '1px solid var(--border-color)', width: '100%' }}>
                 <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', fontWeight: 'bold' }}>
-                    {user.name.charAt(0).toUpperCase()}
+                    {(user.firstName ? user.firstName.charAt(0) : user.name?.charAt(0))?.toUpperCase() || 'U'}
                 </div>
                 <div>
-                    <div style={{ fontWeight: 'bold', color: 'var(--text-dark)' }}>{user.name}</div>
+                    <div style={{ fontWeight: 'bold', color: 'var(--text-dark)' }}>{user.firstName ? `${user.firstName} ${user.lastName || ''}` : user.name || 'User'}</div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{user.email}</div>
                 </div>
             </div>
           ) : (
-            <Link to="/login.html" className="menu-action-btn" onClick={onClose}>
-                <User size={18} /> Login / Register
+            <Link to="/login" className="menu-action-btn" onClick={onClose}>
+                <User size={18} /> Sign In / Create Account
             </Link>
           )}
           <Link to="/wishlist.html" className="menu-action-btn" style={{ border: user ? '1px solid #e2e8f0' : undefined, flex: user ? 'none' : '1' }} onClick={onClose}>
@@ -130,10 +130,10 @@ const MobileNav = ({ user, isOpen, onClose, activeDropdowns, toggleDropdown, car
             <SquaresFour size={20} />
             <span>Home</span>
         </Link>
-        <Link to="/login.html" className="mobile-nav-item" onClick={onClose}>
+        <Link to="/login" className="mobile-nav-item" onClick={onClose}>
             {user ? (
                 <div className="user-initial-circle">
-                    {user.name.charAt(0).toUpperCase()}
+                    {(user.firstName ? user.firstName.charAt(0) : user.name?.charAt(0))?.toUpperCase() || 'U'}
                 </div>
             ) : (
                 <User size={20} />

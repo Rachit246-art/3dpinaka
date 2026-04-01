@@ -156,12 +156,12 @@ const Header = ({ user, cartCount, wishlistCount, toggleMobileMenu }) => {
         <div className="nav-icons">
           <div className="desktop-only">
             {user ? (
-                <Link to="/login.html" style={{ color: 'var(--text-dark)', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Link to="/login" style={{ color: 'var(--text-dark)', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <User size={20} />
-                <span style={{ fontSize: '0.85rem' }}>{user.name.split(' ')[0]}</span>
+                <span style={{ fontSize: '0.85rem' }}>{user.firstName || user.name?.split(' ')[0] || 'User'}</span>
                 </Link>
             ) : (
-                <Link to="/login.html" style={{ color: 'var(--text-dark)', textDecoration: 'none' }}><User size={20} /></Link>
+                <Link to="/login" style={{ color: 'var(--text-dark)', textDecoration: 'none' }}><User size={20} /></Link>
             )}
           </div>
 

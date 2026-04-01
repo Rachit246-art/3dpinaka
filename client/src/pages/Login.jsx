@@ -4,8 +4,8 @@ import { ArrowLeft, User, Lock, WhatsappLogo } from '@phosphor-icons/react';
 import { cartService, WISHLIST_UPDATED } from '../services/cartService';
 
 const Login = () => {
-    const [activeTab, setActiveTab] = useState('login');
-    const [formData, setFormData] = useState({ name: '', email: '', password: '' });
+    const [activeTab, setActiveTab] = useState('signin');
+    const [formData, setFormData] = useState({ firstName: '', lastName: '', mobile: '', email: '', password: '' });
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [users, setUsers] = useState([]);
@@ -49,8 +49,10 @@ const Login = () => {
             if (res.ok) {
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('user', JSON.stringify(data.user));
+                setSuccess('Successfully logged in! Welcome back, ' + data.user.firstName + '.');
                 setCurrentUser(data.user);
                 window.dispatchEvent(new Event('storage'));
+                setTimeout(() => setSuccess(''), 5000);
             } else {
                 setError(data.message || 'Login failed');
             }
@@ -62,6 +64,12 @@ const Login = () => {
     const handleRegister = async (e) => {
         e.preventDefault();
         setError(''); setSuccess('');
+        
+        // Client-side check
+        if (users.some(u => u.email.toLowerCase() === formData.email.toLowerCase())) {
+            setError('This email is already registered. Please login.');
+            return;
+        }
         try {
             const res = await fetch('http://localhost:5000/api/auth/register', {
                 method: 'POST',
@@ -70,8 +78,8 @@ const Login = () => {
             });
             const data = await res.json();
             if (res.ok) {
-                setSuccess('Account created! You can now login.');
-                setActiveTab('login');
+                setSuccess('Account created! You can now sign in.');
+                setActiveTab('signin');
                 // Refresh users
                 const updatedUsers = await fetch('http://localhost:5000/api/auth/users').then(r => r.json());
                 setUsers(Array.isArray(updatedUsers) ? updatedUsers : []);
@@ -91,10 +99,13 @@ const Login = () => {
                     <div className="auth-container reveal active" style={{ maxWidth: '480px', margin: '0 auto', padding: '2.5rem', background: 'var(--white)', borderRadius: '12px', border: '1px solid var(--border-color)', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }}>
                         {currentUser ? (
                             <div className="profile-view" style={{ textAlign: 'center' }}>
+                                {success && <div style={{ padding: '12px', background: '#f0fff4', color: '#38a169', border: '1px solid #9ae6b4', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '0.9rem', textAlign: 'center', fontWeight: '500', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '1.2rem' }}>✅</span> {success}
+                                </div>}
                                 <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', margin: '0 auto 1.5rem', fontWeight: 'bold' }}>
-                                    {currentUser.name.charAt(0).toUpperCase()}
+                                    {(currentUser.firstName ? currentUser.firstName.charAt(0) : currentUser.name?.charAt(0))?.toUpperCase() || 'U'}
                                 </div>
-                                <h2 style={{ marginBottom: '0.5rem', fontSize: '1.5rem', color: 'var(--text-dark)' }}>{currentUser.name}</h2>
+                                <h2 style={{ marginBottom: '0.5rem', fontSize: '1.5rem', color: 'var(--text-dark)' }}>{currentUser.firstName ? `${currentUser.firstName} ${currentUser.lastName || ''}` : currentUser.name || 'User'}</h2>
                                 <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>{currentUser.email}</p>
                                 
                                 <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
@@ -121,26 +132,30 @@ const Login = () => {
                             <>
                                 <div className="auth-tabs" style={{ display: 'flex', marginBottom: '2rem', borderBottom: '1px solid var(--border-color)' }}>
                                     <div 
-                                        className={`auth-tab ${activeTab === 'login' ? 'active' : ''}`} 
-                                        onClick={() => setActiveTab('login')}
-                                        style={{ flex: 1, textAlign: 'center', padding: '1rem', fontWeight: 600, color: activeTab === 'login' ? 'var(--primary)' : 'var(--text-muted)', cursor: 'pointer', borderBottom: activeTab === 'login' ? '2px solid var(--primary)' : 'none' }}
+                                        className={`auth-tab ${activeTab === 'signin' ? 'active' : ''}`} 
+                                        onClick={() => setActiveTab('signin')}
+                                        style={{ flex: 1, textAlign: 'center', padding: '1rem', fontWeight: 600, color: activeTab === 'signin' ? 'var(--primary)' : 'var(--text-muted)', cursor: 'pointer', borderBottom: activeTab === 'signin' ? '2px solid var(--primary)' : 'none' }}
                                     >
-                                        Login
+                                        Sign In
                                     </div>
                                     <div 
-                                        className={`auth-tab ${activeTab === 'register' ? 'active' : ''}`} 
-                                        onClick={() => setActiveTab('register')}
-                                        style={{ flex: 1, textAlign: 'center', padding: '1rem', fontWeight: 600, color: activeTab === 'register' ? 'var(--primary)' : 'var(--text-muted)', cursor: 'pointer', borderBottom: activeTab === 'register' ? '2px solid var(--primary)' : 'none' }}
+                                        className={`auth-tab ${activeTab === 'create-account' ? 'active' : ''}`} 
+                                        onClick={() => setActiveTab('create-account')}
+                                        style={{ flex: 1, textAlign: 'center', padding: '1rem', fontWeight: 600, color: activeTab === 'create-account' ? 'var(--primary)' : 'var(--text-muted)', cursor: 'pointer', borderBottom: activeTab === 'create-account' ? '2px solid var(--primary)' : 'none' }}
                                     >
-                                        Register
+                                        Create Account
                                     </div>
                                 </div>
 
-                                {/* Login Form */}
-                                {activeTab === 'login' && (
+                                {/* Sign In Form */}
+                                {activeTab === 'signin' && (
                                     <form className="auth-form active" onSubmit={handleLogin}>
-                                        {error && <div style={{ color: 'red', marginBottom: '1rem', textAlign: 'center' }}>{error}</div>}
-                                        {success && <div style={{ color: 'green', marginBottom: '1rem', textAlign: 'center' }}>{success}</div>}
+                                        {error && <div style={{ padding: '12px', background: '#fff5f5', color: '#e53e3e', border: '1px solid #feb2b2', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '0.9rem', textAlign: 'center', fontWeight: '500', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                            <span style={{ fontSize: '1.2rem' }}>⚠️</span> {error}
+                                        </div>}
+                                        {success && <div style={{ padding: '12px', background: '#f0fff4', color: '#38a169', border: '1px solid #9ae6b4', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '0.9rem', textAlign: 'center', fontWeight: '500', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                            <span style={{ fontSize: '1.2rem' }}>✅</span> {success}
+                                        </div>}
                                         <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                                             <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-dark)' }}>Email Address</label>
                                             <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="Enter your email" style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border-color)', borderRadius: '6px' }} required />
@@ -154,19 +169,33 @@ const Login = () => {
                                     </form>
                                 )}
 
-                                {/* Register Form */}
-                                {activeTab === 'register' && (
+                                {/* Create Account Form */}
+                                {activeTab === 'create-account' && (
                                     <form className="auth-form active" onSubmit={handleRegister}>
-                                        {error && <div style={{ color: 'red', marginBottom: '1rem', textAlign: 'center' }}>{error}</div>}
-                                        {success && <div style={{ color: 'green', marginBottom: '1rem', textAlign: 'center' }}>{success}</div>}
-                                        <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-dark)' }}>Full Name</label>
-                                            <input type="text" name="name" value={formData.name} onChange={handleChange} placeholder="Enter your full name" style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border-color)', borderRadius: '6px' }} required />
-                                        </div>
-                                        <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-dark)' }}>Email Address</label>
-                                            <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="Enter your email" style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border-color)', borderRadius: '6px' }} required />
-                                        </div>
+                                        {error && <div style={{ padding: '12px', background: '#fff5f5', color: '#e53e3e', border: '1px solid #feb2b2', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '0.9rem', textAlign: 'center', fontWeight: '500', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                            <span style={{ fontSize: '1.2rem' }}>⚠️</span> {error}
+                                        </div>}
+                                        {success && <div style={{ padding: '12px', background: '#f0fff4', color: '#38a169', border: '1px solid #9ae6b4', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '0.9rem', textAlign: 'center', fontWeight: '500', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                            <span style={{ fontSize: '1.2rem' }}>✅</span> {success}
+                                        </div>}
+                                            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+                                                <div className="form-group" style={{ flex: 1 }}>
+                                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-dark)' }}>First Name</label>
+                                                    <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} placeholder="First name" style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border-color)', borderRadius: '6px' }} required />
+                                                </div>
+                                                <div className="form-group" style={{ flex: 1 }}>
+                                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-dark)' }}>Last Name</label>
+                                                    <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} placeholder="Last name" style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border-color)', borderRadius: '6px' }} required />
+                                                </div>
+                                            </div>
+                                            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-dark)' }}>Mobile Number</label>
+                                                <input type="tel" name="mobile" value={formData.mobile} onChange={handleChange} placeholder="Enter your mobile number" style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border-color)', borderRadius: '6px' }} required />
+                                            </div>
+                                            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-dark)' }}>Email Address</label>
+                                                <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="Enter your email" style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border-color)', borderRadius: '6px' }} required />
+                                            </div>
                                         <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                                             <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-dark)' }}>Password</label>
                                             <input type="password" name="password" value={formData.password} onChange={handleChange} placeholder="Create a password" style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border-color)', borderRadius: '6px' }} minLength="6" required />
@@ -175,20 +204,6 @@ const Login = () => {
                                     </form>
                                 )}
                             </>
-                        )}
-                    </div>
-
-                    <div style={{ maxWidth: '480px', margin: '2rem auto 0', padding: '1.5rem', background: 'var(--white)', borderRadius: '12px', border: '1px solid var(--border-color)', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }}>
-                        <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', color: 'var(--text-dark)' }}>Registered Users ({users.length})</h3>
-                        {users.length === 0 ? <p style={{ color: 'var(--text-muted)' }}>No users registered yet.</p> : (
-                            <ul style={{ listStyle: 'none', padding: 0, maxHeight: '200px', overflowY: 'auto' }}>
-                                {users.map(u => (
-                                    <li key={u._id} style={{ padding: '0.75rem 0', borderBottom: '1px solid var(--border-color)', fontSize: '0.9rem' }}>
-                                        <div style={{ fontWeight: 600, color: 'var(--primary)' }}>{u.name}</div>
-                                        <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{u.email}</div>
-                                    </li>
-                                ))}
-                            </ul>
                         )}
                     </div>
                 </div>
