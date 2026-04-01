@@ -1,0 +1,17 @@
+{
+  "name": "3d-print-hub-fullstack",
+  "version": "1.0.0",
+  "description": "Fullstack 3D Print Hub Project",
+  "main": "server/index.js",
+  "scripts": {
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "start": "npm start --prefix server",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "build": "npm run build --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

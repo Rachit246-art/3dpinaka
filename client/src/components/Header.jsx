@@ -1,8 +1,25 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { CaretDown, MagnifyingGlass, User, Heart, ShoppingCart, List } from '@phosphor-icons/react';
 
 const Header = ({ cartCount, wishlistCount, toggleMobileMenu }) => {
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try { setUser(JSON.parse(storedUser)); } catch(e) {}
+    }
+    
+    // Listen for storage changes if they login in another tab or same tab
+    const handleStorage = () => {
+      const u = localStorage.getItem('user');
+      setUser(u ? JSON.parse(u) : null);
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
   return (
     <header>
       <div className="container navbar">
@@ -91,7 +108,14 @@ const Header = ({ cartCount, wishlistCount, toggleMobileMenu }) => {
 
         <div className="nav-icons">
           <MagnifyingGlass size={20} />
-          <Link to="/login.html" style={{ color: 'var(--text-dark)', textDecoration: 'none' }}><User size={20} /></Link>
+          {user ? (
+            <Link to="/login.html" style={{ color: 'var(--text-dark)', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <User size={20} />
+              <span style={{ fontSize: '0.85rem' }}>{user.name.split(' ')[0]}</span>
+            </Link>
+          ) : (
+            <Link to="/login.html" style={{ color: 'var(--text-dark)', textDecoration: 'none' }}><User size={20} /></Link>
+          )}
           <Link to="/wishlist.html" className="heart-icon-wrap" style={{ color: 'var(--text-dark)', textDecoration: 'none' }}>
             <Heart size={20} />
             {wishlistCount > 0 && <span className="heart-badge">{wishlistCount}</span>}
