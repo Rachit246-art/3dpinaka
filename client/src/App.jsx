@@ -14,6 +14,7 @@ import BrandPage from './pages/BrandPage';
 import About from './pages/About';
 import Testimonials from './pages/Testimonials';
 import PrintingServices from './pages/PrintingServices';
+import AdminDashboard from './pages/AdminDashboard';
 import { cartService, CART_UPDATED, WISHLIST_UPDATED, SHOW_TOAST } from './services/cartService';
 import './index.css';
 
@@ -138,6 +139,7 @@ function App() {
         />
 
         <Routes>
+          <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/" element={<Home />} />
           <Route path="/index.html" element={<Home />} />
           <Route path="/support" element={<Support />} />

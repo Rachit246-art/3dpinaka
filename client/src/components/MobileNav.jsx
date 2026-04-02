@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { X, CaretDown, House, Storefront, Flask, ChatTeardropText, User, ShoppingCart, Heart, MagnifyingGlass, Plus, Minus, SquaresFour, ShoppingBag } from '@phosphor-icons/react';
+import { X, CaretDown, House, Storefront, Flask, ChatTeardropText, User, ShoppingCart, Heart, MagnifyingGlass, Plus, Minus, SquaresFour, ShoppingBag, Gear } from '@phosphor-icons/react';
 
 const MobileNav = ({ user, isOpen, onClose, activeDropdowns, toggleDropdown, cartCount, wishlistCount }) => {
   return (
@@ -151,12 +151,22 @@ const MobileNav = ({ user, isOpen, onClose, activeDropdowns, toggleDropdown, car
             </div>
             <span>Wishlist</span>
         </Link>
-        <Link to="/cart.html" className="mobile-nav-item" onClick={onClose}>
+        <Link 
+            to={user && user.role === 'admin' ? '/admin' : '#'} 
+            className="mobile-nav-item" 
+            onClick={(e) => {
+                if (!user || user.role !== 'admin') {
+                    e.preventDefault();
+                    alert('Access Denied: You must be logged in as an Admin to access this panel.');
+                } else {
+                    onClose();
+                }
+            }}
+        >
             <div className="mobile-nav-icon-wrap">
-                <ShoppingBag size={20} />
-                <span className="mobile-nav-badge">{cartCount}</span>
+                <Gear size={20} />
             </div>
-            <span>Cart</span>
+            <span>Admin</span>
         </Link>
       </nav>
     </>

@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import Admin from '../models/Admin.js';
 import bcrypt from 'bcryptjs';
 
 const router = express.Router();
@@ -24,12 +25,36 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email });
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+    
+    let user = await Admin.findOne({ email });
+    let isRoleAdmin = false;
+    
+    if (user) {
+      if (!(await bcrypt.compare(password, user.password))) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+      isRoleAdmin = true;
+    } else {
+      user = await User.findOne({ email });
+      if (!user || !(await bcrypt.compare(password, user.password))) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
     }
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
-    res.json({ token, user: { id: user._id, firstName: user.firstName, lastName: user.lastName, email: user.email, mobile: user.mobile } });
+    
+    const role = isRoleAdmin ? 'admin' : user.role;
+    const token = jwt.sign({ id: user._id, role: role }, process.env.JWT_SECRET, { expiresIn: '1d' });
+    
+    res.json({ 
+      token, 
+      user: { 
+        id: user._id, 
+        firstName: isRoleAdmin ? 'Admin' : user.firstName, 
+        lastName: isRoleAdmin ? '' : user.lastName, 
+        email: user.email, 
+        mobile: isRoleAdmin ? '0000000000' : user.mobile, 
+        role: role 
+      } 
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

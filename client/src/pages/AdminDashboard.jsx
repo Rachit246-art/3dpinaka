@@ -1,0 +1,1342 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  House, Package, ShoppingCart, Users, Gear, 
+  Bell, MagnifyingGlass, List, CurrencyDollar, TrendUp, Clock, ArrowLeft, Heart, X, UploadSimple, Trash, PencilSimple
+} from '@phosphor-icons/react';
+import './AdminDashboard.css';
+
+const AdminDashboard = () => {
+  const [activeTab, setActiveTab] = useState('Dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const navigate = useNavigate();
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  const navItems = [
+    { name: 'Dashboard', icon: <House size={24} /> },
+    { name: 'Products', icon: <Package size={24} /> },
+    { name: 'Orders', icon: <ShoppingCart size={24} /> },
+    { name: 'Users', icon: <Users size={24} /> },
+    { name: 'Settings', icon: <Gear size={24} /> }
+  ];
+
+  const [stats, setStats] = useState({
+    totalProducts: 0,
+    totalOrders: 0,
+    pendingOrders: 0,
+    totalSales: 0,
+    recentOrders: []
+  });
+  const [adminProducts, setAdminProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Add Product Modal State
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [newProduct, setNewProduct] = useState({
+      title: '', category: 'FDM Printer', price: '', oldPrice: '', 
+      inStock: true, image: '', stars: '★★★★★ (5.0)', badge: '', badgeStyle: null, description: ''
+  });
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editProductState, setEditProductState] = useState(null);
+  const [editImagePreview, setEditImagePreview] = useState(null);
+  const [editSelectedFile, setEditSelectedFile] = useState(null);
+  const [deleteConfirmState, setDeleteConfirmState] = useState(null);
+
+  // --- Orders State ---
+  const [orders, setOrders] = useState([]);
+  const [orderFilter, setOrderFilter] = useState('All Orders');
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
+  const [statusConfirmState, setStatusConfirmState] = useState(null);
+  
+  // --- Admin Settings State ---
+  const [adminProfile, setAdminProfile] = useState(null);
+  const [isAdminEditMode, setIsAdminEditMode] = useState(false);
+  const [adminEditForm, setAdminEditForm] = useState({ name: '', phone: '' });
+
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    try {
+        const res = await fetch(`http://localhost:5000/api/orders/${orderId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus })
+        });
+        if (res.ok) {
+            setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status: newStatus } : o));
+            if (selectedOrderDetails && selectedOrderDetails.orderId === orderId) {
+                setSelectedOrderDetails(prev => ({ ...prev, status: newStatus }));
+            }
+            
+            // Refresh stats to ensure Total Sales, Pending Orders instantly reflect changes without page reload.
+            try {
+                const statsRes = await fetch('http://localhost:5000/api/stats');
+                if (statsRes.ok) setStats(await statsRes.json());
+            } catch (statsErr) {
+                console.error("Failed to silently refresh DB stats map", statsErr);
+            }
+        } else {
+            console.error('Failed to update order status');
+        }
+    } catch (e) {
+        console.error('Error updating status', e);
+    }
+  };
+
+  const filteredOrders = orderFilter === 'All Orders' ? orders : orders.filter(o => o.status === orderFilter);
+
+  const getOrderBadgeStyle = (status) => {
+    switch(status) {
+        case 'Pending': return { background: '#fef3c7', color: '#d97706', border: '1px solid #fde68a' };
+        case 'Confirmed': return { background: '#dbeafe', color: '#2563eb', border: '1px solid #bfdbfe' };
+        case 'Printing': return { background: '#f3e8ff', color: '#9333ea', border: '1px solid #e9d5ff' };
+        case 'Delivered': return { background: '#dcfce7', color: '#16a34a', border: '1px solid #bbf7d0' };
+        default: return { background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0' };
+    }
+  };
+  // --------------------
+  
+  // --- Users State ---
+  const [users, setUsers] = useState([]);
+  const [userFilter, setUserFilter] = useState('All Users');
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [selectedUserDetails, setSelectedUserDetails] = useState(null);
+
+  const toggleUserStatus = async (userId, currentStatus) => {
+    try {
+        const newStatus = currentStatus === 'Active' ? 'Blocked' : 'Active';
+        const res = await fetch(`http://localhost:5000/api/users/${userId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus })
+        });
+        if (res.ok) {
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: newStatus } : u));
+            if(selectedUserDetails && selectedUserDetails.id === userId) {
+                setSelectedUserDetails(prev => ({ ...prev, status: newStatus }));
+            }
+        }
+    } catch(err) {
+        console.error('Failed to change user status', err);
+    }
+  };
+
+  const handleViewUserDetails = async (user) => {
+    setSelectedUserDetails({ ...user, recentOrders: [] });
+    try {
+        const res = await fetch(`http://localhost:5000/api/users/${user.id}`);
+        if(res.ok) {
+            setSelectedUserDetails(await res.json());
+        }
+    } catch (err) {
+        console.error('Failed to fetch user details', err);
+    }
+  };
+  // --------------------
+
+  const handleEditImageUpload = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+          setEditSelectedFile(file);
+          setEditImagePreview(URL.createObjectURL(file));
+      }
+  };
+
+  const handleImageUpload = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+          setSelectedFile(file);
+          setImagePreview(URL.createObjectURL(file));
+      }
+  };
+
+  const handleSaveAdminProfile = async () => {
+    try {
+        const res = await fetch('http://localhost:5000/api/admin', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(adminEditForm)
+        });
+        if (res.ok) {
+            const updatedProfile = await res.json();
+            setAdminProfile(updatedProfile);
+            setIsAdminEditMode(false);
+        } else {
+            alert('Failed to update admin profile');
+        }
+    } catch (err) {
+        console.error('Error saving admin details', err);
+    }
+  };
+
+  useEffect(() => {
+    const fetchDashData = async () => {
+      try {
+        const statsRes = await fetch('http://localhost:5000/api/stats');
+        if (statsRes.ok) setStats(await statsRes.json());
+        
+        const prodsRes = await fetch('http://localhost:5000/api/products');
+        if (prodsRes.ok) setAdminProducts(await prodsRes.json());
+
+        const ordersRes = await fetch('http://localhost:5000/api/orders');
+        if (ordersRes.ok) {
+            const ordersData = await ordersRes.json();
+            console.log("Fetched orders:", ordersData);
+            setOrders(ordersData);
+        }
+
+        const usersRes = await fetch('http://localhost:5000/api/users');
+        if (usersRes.ok) {
+            setUsers(await usersRes.json());
+        }
+
+        const adminRes = await fetch('http://localhost:5000/api/admin');
+        if (adminRes.ok) {
+            setAdminProfile(await adminRes.json());
+        }
+      } catch (error) {
+        console.error("Failed to fetch dashboard data", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDashData();
+  }, []);
+
+  const getStatusClass = (status) => {
+    switch (status) {
+      case 'Delivered': return 'status-delivered';
+      case 'Pending': return 'status-pending';
+      case 'Shipped': return 'status-shipped';
+      case 'Cancelled': return 'status-cancelled';
+      default: return '';
+    }
+  };
+
+  return (
+    <div className="admin-layout">
+      {/* Sidebar */}
+      <aside className={`admin-sidebar ${isSidebarOpen ? 'open' : 'closed'}`}>
+        <div className="sidebar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', boxSizing: 'border-box' }}>
+          <h2>Admin<span>Pro</span></h2>
+          <button className="sidebar-toggle-btn" onClick={toggleSidebar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--admin-text-main)' }}>
+             <span className="desktop-icon"><List size={24} /></span>
+             <span className="mobile-icon"><X size={24} /></span>
+          </button>
+        </div>
+        <nav className="sidebar-nav">
+          {navItems.map((item) => (
+            <button 
+              key={item.name}
+              className={`adm-nav-item ${activeTab === item.name ? 'active' : ''}`}
+              onClick={() => {
+                  setActiveTab(item.name);
+                  if(window.innerWidth <= 1024) toggleSidebar();
+              }}
+            >
+              <span className="adm-nav-icon">{item.icon}</span>
+              <span className="adm-nav-text">{item.name}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      {/* Main Content */}
+      <main className="admin-main">
+        {/* Header */}
+        <header className="admin-header">
+          <div className="header-left">
+            <button className="menu-toggle mobile-only-toggle" onClick={toggleSidebar}>
+              <List size={28} />
+            </button>
+            <div className="search-bar">
+              <MagnifyingGlass size={20} className="search-icon" />
+              <input type="text" placeholder="Search..." />
+            </div>
+          </div>
+          <div className="header-right">
+            <button 
+              className="back-home-btn-admin" 
+              onClick={() => navigate('/')} 
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: '1px solid var(--admin-border-color)', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', color: 'var(--admin-text-main)', fontWeight: 500, transition: 'all 0.2s', marginRight: '8px' }}
+              onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--admin-primary)'; e.currentTarget.style.color = 'var(--admin-primary)'; }}
+              onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--admin-border-color)'; e.currentTarget.style.color = 'var(--admin-text-main)'; }}
+            >
+              <ArrowLeft size={18} />
+              <span>Back to Home</span>
+            </button>
+            <button className="notification-btn">
+              <Bell size={24} />
+              <span className="badge">3</span>
+            </button>
+            <div className="admin-profile">
+              <img src="https://ui-avatars.com/api/?name=Admin+User&background=6366f1&color=fff" alt="Admin" />
+              <div className="profile-info">
+                <span className="profile-name">Admin User</span>
+                <span className="profile-role">Superadmin</span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Dynamic Tab Content */}
+        {activeTab === 'Dashboard' && (
+          <div className="dashboard-content">
+          <div className="welcome-banner">
+            <h1>Welcome back, Admin! 👋</h1>
+            <p>Here's what's happening with your store today.</p>
+          </div>
+
+          {loading ? (
+            <div style={{ padding: '60px', textAlign: 'center', color: 'var(--admin-text-muted)', fontSize: '1.2rem', fontWeight: 500 }}>
+              Fetching real-time data...
+            </div>
+          ) : (
+            <>
+              {/* Stats Cards */}
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <div className="stat-icon purple">
+                    <Package size={28} weight="fill" />
+                  </div>
+                  <div className="stat-details">
+                    <h3>Total Products</h3>
+                    <p className="stat-value">{stats.totalProducts}</p>
+                    <span className="stat-trend positive"><TrendUp size={16} weight="bold"/> Live data</span>
+                  </div>
+                </div>
+                
+                <div className="stat-card">
+                  <div className="stat-icon blue">
+                    <ShoppingCart size={28} weight="fill" />
+                  </div>
+                  <div className="stat-details">
+                    <h3>Total Orders</h3>
+                    <p className="stat-value">{stats.totalOrders}</p>
+                    <span className="stat-trend positive"><TrendUp size={16} weight="bold"/> Live data</span>
+                  </div>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-icon orange">
+                    <Clock size={28} weight="fill" />
+                  </div>
+                  <div className="stat-details">
+                    <h3>Pending Orders</h3>
+                    <p className="stat-value">{stats.pendingOrders}</p>
+                    <span className="stat-trend neutral">Needs attention</span>
+                  </div>
+                </div>
+
+                <div className="stat-card">
+                  <div className="stat-icon green">
+                    <CurrencyDollar size={28} weight="fill" />
+                  </div>
+                  <div className="stat-details">
+                    <h3>Total Sales</h3>
+                    <p className="stat-value">₹{Number(stats.totalSales || 0).toLocaleString('en-IN')}</p>
+                    <span className="stat-trend positive"><TrendUp size={16} weight="bold"/> Live data</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Orders Table */}
+              <div className="recent-orders-section">
+                <div className="section-header">
+                  <h2>Recent Orders</h2>
+                  <button className="view-all-btn">View All</button>
+                </div>
+                <div className="table-container">
+                  <table className="orders-table">
+                    <thead>
+                      <tr>
+                        <th>Order ID</th>
+                        <th>Customer Name</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orders.slice(0, 5).length > 0 ? orders.slice(0, 5).map((order, index) => (
+                        <tr key={index} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = '#fefce8'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
+                          <td className="adm-order-id" style={{ padding: '16px', fontWeight: 500, color: '#3b82f6' }}>{order.orderId}</td>
+                          <td style={{ padding: '16px', color: '#334155', fontWeight: 500 }}>{order.customerName}</td>
+                          <td className="adm-order-amount" style={{ padding: '16px', fontWeight: 600, color: '#0f172a' }}>{order.totalPrice ? `₹${order.totalPrice.toLocaleString('en-IN')}` : '₹0'}</td>
+                          <td style={{ padding: '16px' }}>
+                            <select 
+                              value={order.status}
+                              onChange={(e) => {
+                                 setStatusConfirmState({ orderId: order.orderId, newStatus: e.target.value });
+                              }}
+                              style={{ 
+                                padding: '6px 16px 6px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600, 
+                                ...getOrderBadgeStyle(order.status), 
+                                transition: 'all 0.3s ease', display: 'inline-block',
+                                cursor: 'pointer', outline: 'none', appearance: 'none', textAlign: 'center'
+                              }}
+                            >
+                              <option value="Pending" style={{ background: 'white', color: '#d97706' }}>Pending</option>
+                              <option value="Confirmed" style={{ background: 'white', color: '#2563eb' }}>Confirmed</option>
+                              <option value="Printing" style={{ background: 'white', color: '#9333ea' }}>Printing</option>
+                              <option value="Delivered" style={{ background: 'white', color: '#16a34a' }}>Delivered</option>
+                            </select>
+                          </td>
+                          <td style={{ padding: '16px' }}>
+                            <button 
+                              className="action-btn"
+                              onClick={() => setSelectedOrderDetails(order)}
+                              style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', color: '#3b82f6', fontWeight: 500, cursor: 'pointer', fontSize: '0.85rem', transition: 'all 0.2s' }}
+                              onMouseOver={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#bfdbfe'; }}
+                              onMouseOut={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                            >
+                              Details
+                            </button>
+                          </td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan="5" style={{ textAlign: 'center', padding: '24px', color: 'var(--admin-text-muted)' }}>
+                            No orders found in the database yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+          </div>
+        )}
+
+        {activeTab === 'Products' && (
+          <div className="dashboard-content" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '1.5rem', color: 'var(--admin-text-dark)' }}>Products Management ({adminProducts.length} items)</h2>
+              <button 
+                onClick={() => setIsAddModalOpen(true)}
+                style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)', transition: 'background 0.3s' }}
+                onMouseOver={e => e.currentTarget.style.background = '#2563eb'}
+                onMouseOut={e => e.currentTarget.style.background = '#3b82f6'}
+              >
+                + Add New Product
+              </button>
+            </div>
+            {adminProducts.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--admin-text-muted)' }}>Loading products...</div>
+            ) : (
+                <div className="products-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1.5rem' }}>
+                    {adminProducts.map(product => (
+                        <div key={product._id || Math.random()} className={`product-card ${!product.inStock ? 'sold-out' : ''}`}>
+                            <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '8px', zIndex: 10 }}>
+                                <button 
+                                    className="action-btn-custom"
+                                    title="Edit Product Details"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditProductState(product);
+                                        setEditImagePreview(product.image?.startsWith('/uploads') ? `http://localhost:5000${product.image}` : product.image);
+                                        setEditSelectedFile(null);
+                                        setIsEditModalOpen(true);
+                                    }}
+                                    style={{ background: 'white', border: 'none', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', color: '#3b82f6', transition: 'all 0.2s' }}
+                                    onMouseOver={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.transform = 'scale(1.1)'; }}
+                                    onMouseOut={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.transform = 'scale(1)'; }}
+                                >
+                                    <PencilSimple size={18} weight="bold" />
+                                </button>
+                                <button 
+                                    className="action-btn-custom" 
+                                    title="Delete Product Permanently"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteConfirmState(product);
+                                }}
+                                style={{ color: '#f43f5e', transition: 'all 0.2s' }}
+                                onMouseOver={e => { e.currentTarget.style.background = '#ffe4e6'; e.currentTarget.style.transform = 'scale(1.1)'; }}
+                                onMouseOut={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.transform = 'scale(1)'; }}
+                            >
+                                    <Trash size={18} weight="fill" />
+                                </button>
+                            </div>
+                            {product.badge && <div className="badge" style={{ ...product.badgeStyle, top: '10px', left: '10px', position: 'absolute' }}>{product.badge}</div>}
+                            <div className="product-img-wrapper" style={{ position: 'relative' }}>
+                                <img src={product.image?.startsWith('/uploads') ? `http://localhost:5000${product.image}` : product.image} alt={product.title} className="product-img" />
+                                {!product.inStock && (
+                                    <div className="sold-out-overlay">
+                                        <div className="sold-out-circle">Sold Out</div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="product-info">
+                                <div className="product-cat">{product.category}</div>
+                                <div className="product-title" style={{ minHeight: '45px' }}>{product.title}</div>
+                                <div className="stars">{product.stars || '★★★★★ (5.0)'}</div>
+                                <div className="product-price">
+                                    {product.price}
+                                    {!product.inStock && <span className="out-of-stock-label">Out Of Stock</span>}
+                                </div>
+                                {/* Admin specific action area */}
+                                <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '8px' }}>
+                                    <button 
+                                      className="btn btn-block" 
+                                      style={{ 
+                                          background: product.inStock ? '#cbd5e1' : '#f43f5e', 
+                                          color: product.inStock ? '#334155' : 'white',
+                                          fontSize: '0.9rem', padding: '8px',
+                                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                                      }}
+                                      onClick={async () => {
+                                          const newStatus = !product.inStock;
+                                          // Optimistic update
+                                          setAdminProducts(prev => prev.map(p => p._id === product._id ? { ...p, inStock: newStatus } : p));
+                                          try {
+                                              await fetch(`http://localhost:5000/api/products/${product._id}`, {
+                                                  method: 'PUT',
+                                                  headers: { 'Content-Type': 'application/json' },
+                                                  body: JSON.stringify({ inStock: newStatus })
+                                              });
+                                          } catch(e) {}
+                                      }}
+                                    >
+                                      {product.inStock ? 'Mark as Out of Stock' : 'Restock Item'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'Orders' && (
+          <div className="dashboard-content" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '1.5rem', color: 'var(--admin-text-dark)' }}>Orders Management</h2>
+              <div style={{ display: 'flex', gap: '8px', background: 'white', padding: '4px', borderRadius: '8px', border: '1px solid var(--admin-border-color)' }}>
+                {['All Orders', 'Pending', 'Confirmed', 'Printing', 'Delivered'].map(status => (
+                  <button 
+                    key={status}
+                    onClick={() => setOrderFilter(status)}
+                    style={{ 
+                      padding: '8px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 500, transition: 'all 0.2s',
+                      background: orderFilter === status ? '#3b82f6' : 'transparent',
+                      color: orderFilter === status ? 'white' : 'var(--admin-text-main)'
+                    }}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--admin-border-color)', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '900px' }}>
+                  <thead style={{ background: '#f8fafc', borderBottom: '1px solid var(--admin-border-color)' }}>
+                    <tr>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Order ID</th>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Customer</th>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Phone</th>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Product</th>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Qty</th>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Total Price</th>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Date</th>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Status</th>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase', textAlign: 'center' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.length === 0 ? (
+                      <tr>
+                        <td colSpan="9" style={{ textAlign: 'center', padding: '60px', color: 'var(--admin-text-muted)', fontSize: '1.1rem' }}>
+                          No orders yet
+                        </td>
+                      </tr>
+                    ) : filteredOrders.length > 0 ? filteredOrders.map((order, index) => (
+                      <tr key={index} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = '#fefce8'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
+                        <td style={{ padding: '16px', fontWeight: 500, color: '#3b82f6' }}>{order.orderId}</td>
+                        <td style={{ padding: '16px', color: '#334155', fontWeight: 500 }}>{order.customerName}</td>
+                        <td style={{ padding: '16px', color: '#64748b', fontSize: '0.9rem' }}>{order.phone}</td>
+                        <td style={{ padding: '16px', color: '#334155', maxWidth: '150px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{order.productName}</td>
+                        <td style={{ padding: '16px', color: '#64748b' }}>{order.quantity}</td>
+                        <td style={{ padding: '16px', fontWeight: 600, color: '#0f172a' }}>{order.totalPrice ? `₹${order.totalPrice.toLocaleString('en-IN')}` : '₹0'}</td>
+                        <td style={{ padding: '16px', color: '#64748b', fontSize: '0.9rem' }}>{order.createdAt ? new Date(order.createdAt).toISOString().split('T')[0] : ''}</td>
+                        <td style={{ padding: '16px' }}>
+                          <select 
+                            value={order.status}
+                            onChange={(e) => {
+                               setStatusConfirmState({ orderId: order.orderId, newStatus: e.target.value });
+                            }}
+                            style={{ 
+                              padding: '6px 16px 6px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600, 
+                              ...getOrderBadgeStyle(order.status), 
+                              transition: 'all 0.3s ease', display: 'inline-block',
+                              cursor: 'pointer', outline: 'none', appearance: 'none', textAlign: 'center'
+                            }}
+                          >
+                            <option value="Pending" style={{ background: 'white', color: '#d97706' }}>Pending</option>
+                            <option value="Confirmed" style={{ background: 'white', color: '#2563eb' }}>Confirmed</option>
+                            <option value="Printing" style={{ background: 'white', color: '#9333ea' }}>Printing</option>
+                            <option value="Delivered" style={{ background: 'white', color: '#16a34a' }}>Delivered</option>
+                          </select>
+                        </td>
+                        <td style={{ padding: '16px', textAlign: 'center' }}>
+                          <button 
+                            onClick={() => setSelectedOrderDetails(order)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', color: '#3b82f6', fontWeight: 500, cursor: 'pointer', fontSize: '0.85rem', transition: 'all 0.2s' }}
+                            onMouseOver={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#bfdbfe'; }}
+                            onMouseOut={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                          >
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr>
+                        <td colSpan="9" style={{ textAlign: 'center', padding: '60px', color: 'var(--admin-text-muted)' }}>
+                          No orders found matching this status.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'Users' && (
+          <div className="dashboard-content" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '1.5rem', color: 'var(--admin-text-dark)' }}>Users Management</h2>
+              
+              <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', background: 'white', border: '1px solid var(--admin-border-color)', borderRadius: '8px', padding: '6px 12px' }}>
+                   <MagnifyingGlass size={18} color="#64748b" style={{ marginRight: '8px' }} />
+                   <input 
+                     type="text" 
+                     placeholder="Search by name or email..." 
+                     value={userSearchQuery}
+                     onChange={(e) => setUserSearchQuery(e.target.value)}
+                     style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: '0.9rem', width: '200px' }}
+                   />
+                </div>
+                
+                <div style={{ display: 'flex', gap: '8px', background: 'white', padding: '4px', borderRadius: '8px', border: '1px solid var(--admin-border-color)' }}>
+                  {['All Users', 'Active', 'Blocked'].map(status => (
+                    <button 
+                      key={status}
+                      onClick={() => setUserFilter(status)}
+                      style={{ 
+                        padding: '8px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 500, transition: 'all 0.2s',
+                        background: userFilter === status ? '#3b82f6' : 'transparent',
+                        color: userFilter === status ? 'white' : 'var(--admin-text-main)'
+                      }}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--admin-border-color)', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '900px' }}>
+                  <thead style={{ background: '#f8fafc', borderBottom: '1px solid var(--admin-border-color)' }}>
+                    <tr>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>User ID</th>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Name</th>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Email</th>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Phone</th>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Orders</th>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Joined</th>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Status</th>
+                      <th style={{ padding: '16px', color: '#64748b', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase', textAlign: 'center' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                        const filteredUsers = users
+                          .filter(u => userFilter === 'All Users' ? true : u.status === userFilter)
+                          .filter(u => u.name.toLowerCase().includes(userSearchQuery.toLowerCase()) || u.email.toLowerCase().includes(userSearchQuery.toLowerCase()));
+                          
+                        if (filteredUsers.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan="8" style={{ textAlign: 'center', padding: '60px', color: 'var(--admin-text-muted)', fontSize: '1.1rem' }}>
+                                  No users found
+                                </td>
+                              </tr>
+                            );
+                        }
+                        
+                        return filteredUsers.map((user) => (
+                            <tr key={user.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = '#f8fafc'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
+                                  <td style={{ padding: '16px', fontWeight: 500, color: '#3b82f6' }}>{user.id}</td>
+                                  <td style={{ padding: '16px', color: '#334155', fontWeight: 600 }}>{user.name}</td>
+                                  <td style={{ padding: '16px', color: '#64748b', fontSize: '0.95rem' }}>{user.email}</td>
+                                  <td style={{ padding: '16px', color: '#64748b', fontSize: '0.9rem' }}>{user.phone}</td>
+                                  <td style={{ padding: '16px', color: '#334155', fontWeight: 500 }}>{user.totalOrders}</td>
+                                  <td style={{ padding: '16px', color: '#64748b', fontSize: '0.9rem' }}>{user.joinedDate}</td>
+                                  <td style={{ padding: '16px' }}>
+                                    <span style={{ 
+                                      padding: '6px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600, 
+                                      background: user.status === 'Active' ? '#dcfce7' : '#fee2e2',
+                                      color: user.status === 'Active' ? '#16a34a' : '#ef4444',
+                                      border: `1px solid ${user.status === 'Active' ? '#bbf7d0' : '#fecaca'}`,
+                                      transition: 'all 0.3s ease'
+                                    }}>
+                                      {user.status}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: '16px', textAlign: 'center', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                                    <button 
+                                      onClick={() => handleViewUserDetails(user)}
+                                      style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', color: '#3b82f6', fontWeight: 500, cursor: 'pointer', fontSize: '0.85rem', transition: 'all 0.2s' }}
+                                      onMouseOver={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#bfdbfe'; }}
+                                      onMouseOut={e => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                    >
+                                      View Details
+                                    </button>
+                                    <button 
+                                      onClick={() => toggleUserStatus(user.id, user.status)}
+                                      style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', background: user.status === 'Active' ? '#fee2e2' : '#dcfce7', color: user.status === 'Active' ? '#ef4444' : '#16a34a', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem', transition: 'all 0.2s' }}
+                                    >
+                                      {user.status === 'Active' ? 'Block' : 'Unblock'}
+                                    </button>
+                                  </td>
+                            </tr>
+                        ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'Settings' && (
+          <div className="dashboard-content" style={{ padding: '24px' }}>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', color: 'var(--admin-text-dark)' }}>Settings</h2>
+            
+            {adminProfile ? (
+              <div style={{ background: 'white', padding: '30px', borderRadius: '12px', border: '1px solid var(--admin-border-color)', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', maxWidth: '600px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid #e2e8f0', paddingBottom: '16px' }}>
+                  <h3 style={{ fontSize: '1.2rem', color: '#1e293b' }}>Admin Profile</h3>
+                  {!isAdminEditMode && (
+                    <button 
+                      onClick={() => { setAdminEditForm({ name: adminProfile.name || '', phone: adminProfile.phone || '' }); setIsAdminEditMode(true); }}
+                      style={{ padding: '8px 16px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, transition: 'background 0.2s', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      onMouseOver={e => e.currentTarget.style.background = '#2563eb'}
+                      onMouseOut={e => e.currentTarget.style.background = '#3b82f6'}
+                    >
+                      <PencilSimple size={16} /> Edit Profile
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: 'grid', gap: '20px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase' }}>Name</label>
+                    {isAdminEditMode ? (
+                      <input 
+                        type="text" 
+                        value={adminEditForm.name} 
+                        onChange={e => setAdminEditForm({...adminEditForm, name: e.target.value})}
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '1rem', boxSizing: 'border-box' }}
+                      />
+                    ) : (
+                      <div style={{ fontSize: '1.1rem', color: '#0f172a', fontWeight: 500 }}>{adminProfile.name || 'Admin User'}</div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase' }}>Email (Non-editable)</label>
+                    <div style={{ fontSize: '1.1rem', color: '#0f172a', fontWeight: 500 }}>{adminProfile.email}</div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase' }}>Phone</label>
+                    {isAdminEditMode ? (
+                      <input 
+                        type="text" 
+                        value={adminEditForm.phone} 
+                        onChange={e => setAdminEditForm({...adminEditForm, phone: e.target.value})}
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '1rem', boxSizing: 'border-box' }}
+                      />
+                    ) : (
+                      <div style={{ fontSize: '1.1rem', color: '#0f172a', fontWeight: 500 }}>{adminProfile.phone || 'Not provided'}</div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase' }}>Role</label>
+                      <span style={{ background: '#fef3c7', color: '#d97706', padding: '4px 10px', borderRadius: '4px', fontSize: '0.9rem', fontWeight: 600 }}>{adminProfile.role}</span>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase' }}>Joined Date</label>
+                      <div style={{ fontSize: '1rem', color: '#334155' }}>
+                        {adminProfile.createdAt ? new Date(adminProfile.createdAt).toLocaleDateString('en-GB') : 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {isAdminEditMode && (
+                  <div style={{ marginTop: '30px', display: 'flex', gap: '12px', justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
+                    <button 
+                      onClick={() => setIsAdminEditMode(false)}
+                      style={{ padding: '8px 16px', background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#334155', transition: 'all 0.2s' }}
+                      onMouseOver={e => e.currentTarget.style.background = '#f8fafc'}
+                      onMouseOut={e => e.currentTarget.style.background = 'white'}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={handleSaveAdminProfile}
+                      style={{ padding: '8px 16px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, transition: 'background 0.2s' }}
+                      onMouseOver={e => e.currentTarget.style.background = '#059669'}
+                      onMouseOut={e => e.currentTarget.style.background = '#10b981'}
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ background: 'white', padding: '40px', borderRadius: '12px', border: '1px solid var(--admin-border-color)', textAlign: 'center' }}>
+                <Gear size={48} color="var(--admin-text-muted)" style={{ marginBottom: '16px', animation: 'spin 4s linear infinite' }} />
+                <p style={{ color: 'var(--admin-text-muted)', fontSize: '1.1rem' }}>Loading Admin Profile...</p>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Add Product Modal */}
+      {isAddModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, animation: 'fadeIn 0.3s ease' }}>
+          <div style={{ background: 'white', padding: '2rem', borderRadius: '12px', width: '90%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+             <button onClick={() => setIsAddModalOpen(false)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><X size={24} /></button>
+             <h2 style={{ marginBottom: '1.5rem', color: '#0f172a' }}>Add New Product</h2>
+             
+             <div style={{ display: 'grid', gap: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>Product Name</label>
+                  <input type="text" value={newProduct.title} onChange={e => setNewProduct({...newProduct, title: e.target.value})} style={{ width: '100%', padding: '0.8rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} placeholder="e.g. Anycubic Kobra 2" />
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>Category</label>
+                      <select value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})} style={{ width: '100%', padding: '0.8rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }}>
+                          <option value="FDM Printer">FDM Printer</option>
+                          <option value="Resin Printer">Resin Printer</option>
+                          <option value="Accessory">Accessory</option>
+                          <option value="Material">Material</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>Stock Status</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '45px' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: '#334155' }}>
+                              <input type="radio" name="stock" checked={newProduct.inStock} onChange={() => setNewProduct({...newProduct, inStock: true})} /> In Stock
+                          </label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: '#334155' }}>
+                              <input type="radio" name="stock" checked={!newProduct.inStock} onChange={() => setNewProduct({...newProduct, inStock: false})} /> Out of Stock
+                          </label>
+                      </div>
+                    </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>Selling Price (₹)</label>
+                      <input type="text" placeholder="e.g. ₹25,000" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} style={{ width: '100%', padding: '0.8rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>MRP (₹)</label>
+                      <input type="text" placeholder="e.g. ₹35,000" value={newProduct.oldPrice} onChange={e => setNewProduct({...newProduct, oldPrice: e.target.value})} style={{ width: '100%', padding: '0.8rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} />
+                    </div>
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>Rating Overview</label>
+                      <input type="text" placeholder="e.g. ★★★★★ (5.0)" value={newProduct.stars} onChange={e => setNewProduct({...newProduct, stars: e.target.value})} style={{ width: '100%', padding: '0.8rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>Tags / Badge</label>
+                       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', height: '45px' }}>
+                           <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: '#334155' }}>
+                               <input type="radio" name="badge" checked={newProduct.badge === 'Sale'} onChange={() => setNewProduct({...newProduct, badge: 'Sale', badgeStyle: { background: '#ef4444', color: 'white' }})} /> Sale
+                           </label>
+                           <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: '#334155' }}>
+                               <input type="radio" name="badge" checked={newProduct.badge === 'Best Seller'} onChange={() => setNewProduct({...newProduct, badge: 'Best Seller', badgeStyle: { background: '#10b981', color: 'white' }})} /> Best
+                           </label>
+                           <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: '#334155' }}>
+                               <input type="radio" name="badge" checked={newProduct.badge === ''} onChange={() => setNewProduct({...newProduct, badge: '', badgeStyle: null})} /> None
+                           </label>
+                       </div>
+                    </div>
+                </div>
+
+                <div>
+                   <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155' }}>Product Image</label>
+                   <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed #cbd5e1', borderRadius: '8px', padding: '2rem', cursor: 'pointer', background: '#f8fafc', transition: 'all 0.2s' }}>
+                       {imagePreview ? (
+                           <img src={imagePreview} alt="Preview" style={{ height: '150px', objectFit: 'contain' }} />
+                       ) : (
+                           <>
+                              <UploadSimple size={32} color="#64748b" style={{ marginBottom: '10px' }} />
+                              <span style={{ color: '#64748b', fontWeight: 500 }}>Drop image here or click to browse</span>
+                              <span style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '5px' }}>Supported formats: JPG, PNG, WEBP</span>
+                           </>
+                       )}
+                       <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
+                   </label>
+                </div>
+
+                <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                    <button 
+                        onClick={() => setIsAddModalOpen(false)}
+                        style={{ padding: '0.8rem 1.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', color: '#334155', fontWeight: 600, cursor: 'pointer' }}>
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={async () => {
+                            if (!newProduct.title || !newProduct.price || !selectedFile) return alert('Please provide Title, Price, and Image!');
+                            try {
+                                const formData = new FormData();
+                                formData.append('title', newProduct.title);
+                                formData.append('category', newProduct.category);
+                                formData.append('price', newProduct.price);
+                                formData.append('oldPrice', newProduct.oldPrice);
+                                formData.append('inStock', newProduct.inStock);
+                                formData.append('stars', newProduct.stars);
+                                formData.append('badge', newProduct.badge);
+                                if (newProduct.badgeStyle) formData.append('badgeStyle', JSON.stringify(newProduct.badgeStyle));
+                                formData.append('image', selectedFile);
+
+                                const res = await fetch('http://localhost:5000/api/products', {
+                                    method: 'POST',
+                                    body: formData
+                                });
+                                if(res.ok) {
+                                    const createdProduct = await res.json();
+                                    setAdminProducts([createdProduct, ...adminProducts]);
+                                    setIsAddModalOpen(false);
+                                    setNewProduct({ title: '', category: 'FDM Printer', price: '', oldPrice: '', inStock: true, image: '', stars: '★★★★★ (5.0)', badge: '', badgeStyle: null, description: '' });
+                                    setImagePreview(null);
+                                    setSelectedFile(null);
+                                    alert('Successfully added product!');
+                                } else {
+                                    const errorData = await res.json();
+                                    alert('Server Error: ' + (errorData.message || 'Could not add product.'));
+                                }
+                            } catch(e) { 
+                                console.error('Failed to create product', e); 
+                                alert('Network Error: ' + e.message);
+                            }
+                        }}
+                        style={{ padding: '0.8rem 1.5rem', borderRadius: '6px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }}
+                        onMouseOver={e => e.currentTarget.style.background = '#2563eb'}
+                        onMouseOut={e => e.currentTarget.style.background = '#3b82f6'}>
+                        Add Product
+                    </button>
+                </div>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {isEditModalOpen && editProductState && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, animation: 'fadeIn 0.3s ease' }}>
+          <div style={{ background: 'white', padding: '2rem', borderRadius: '12px', width: '90%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+             <button onClick={() => setIsEditModalOpen(false)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><X size={24} /></button>
+             <h2 style={{ marginBottom: '1.5rem', color: '#0f172a' }}>Edit Product Attributes</h2>
+             
+             <div style={{ display: 'grid', gap: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>Product Name</label>
+                  <input type="text" value={editProductState.title} onChange={e => setEditProductState({...editProductState, title: e.target.value})} style={{ width: '100%', padding: '0.8rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} placeholder="e.g. Anycubic Kobra 2" />
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>Category</label>
+                      <select value={editProductState.category} onChange={e => setEditProductState({...editProductState, category: e.target.value})} style={{ width: '100%', padding: '0.8rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }}>
+                          <option value="FDM Printer">FDM Printer</option>
+                          <option value="Resin Printer">Resin Printer</option>
+                          <option value="Accessory">Accessory</option>
+                          <option value="Material">Material</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>Stock Status</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '45px' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: '#334155' }}>
+                              <input type="radio" name="editstock" checked={editProductState.inStock} onChange={() => setEditProductState({...editProductState, inStock: true})} /> In Stock
+                          </label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: '#334155' }}>
+                              <input type="radio" name="editstock" checked={!editProductState.inStock} onChange={() => setEditProductState({...editProductState, inStock: false})} /> Out of Stock
+                          </label>
+                      </div>
+                    </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>Selling Price (₹)</label>
+                      <input type="text" placeholder="e.g. ₹25,000" value={editProductState.price} onChange={e => setEditProductState({...editProductState, price: e.target.value})} style={{ width: '100%', padding: '0.8rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>MRP (₹)</label>
+                      <input type="text" placeholder="e.g. ₹35,000" value={editProductState.oldPrice || ''} onChange={e => setEditProductState({...editProductState, oldPrice: e.target.value})} style={{ width: '100%', padding: '0.8rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} />
+                    </div>
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>Rating Overview</label>
+                      <input type="text" placeholder="e.g. ★★★★★ (5.0)" value={editProductState.stars || ''} onChange={e => setEditProductState({...editProductState, stars: e.target.value})} style={{ width: '100%', padding: '0.8rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>Tags / Badge</label>
+                       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', height: '45px' }}>
+                           <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: '#334155' }}>
+                               <input type="radio" name="editbadge" checked={editProductState.badge === 'Sale'} onChange={() => setEditProductState({...editProductState, badge: 'Sale', badgeStyle: { background: '#ef4444', color: 'white' }})} /> Sale
+                           </label>
+                           <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: '#334155' }}>
+                               <input type="radio" name="editbadge" checked={editProductState.badge === 'Best Seller'} onChange={() => setEditProductState({...editProductState, badge: 'Best Seller', badgeStyle: { background: '#10b981', color: 'white' }})} /> Best
+                           </label>
+                           <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: '#334155' }}>
+                               <input type="radio" name="editbadge" checked={!editProductState.badge} onChange={() => setEditProductState({...editProductState, badge: '', badgeStyle: null})} /> None
+                           </label>
+                       </div>
+                    </div>
+                </div>
+
+                <div>
+                   <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155' }}>Product Image</label>
+                   <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed #cbd5e1', borderRadius: '8px', padding: '2rem', cursor: 'pointer', background: '#f8fafc', transition: 'all 0.2s' }}>
+                       {editImagePreview ? (
+                           <img src={editImagePreview} alt="Preview" style={{ height: '150px', objectFit: 'contain' }} />
+                       ) : (
+                           <>
+                              <UploadSimple size={32} color="#64748b" style={{ marginBottom: '10px' }} />
+                              <span style={{ color: '#64748b', fontWeight: 500 }}>Drop image here or click to change</span>
+                              <span style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '5px' }}>Optional. Leave blank to keep current image.</span>
+                           </>
+                       )}
+                       <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleEditImageUpload} />
+                   </label>
+                </div>
+
+                <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                    <button 
+                        onClick={() => setIsEditModalOpen(false)}
+                        style={{ padding: '0.8rem 1.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', color: '#334155', fontWeight: 600, cursor: 'pointer' }}>
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={async () => {
+                            if (!editProductState.title || !editProductState.price) return alert('Please provide Title and Price!');
+                            try {
+                                const formData = new FormData();
+                                formData.append('title', editProductState.title);
+                                formData.append('category', editProductState.category);
+                                formData.append('price', editProductState.price);
+                                if (editProductState.oldPrice) formData.append('oldPrice', editProductState.oldPrice);
+                                formData.append('inStock', editProductState.inStock);
+                                if (editProductState.stars) formData.append('stars', editProductState.stars);
+                                formData.append('badge', editProductState.badge || '');
+                                if (editProductState.badgeStyle) formData.append('badgeStyle', JSON.stringify(editProductState.badgeStyle));
+                                if (editSelectedFile) formData.append('image', editSelectedFile);
+
+                                const res = await fetch(`http://localhost:5000/api/products/${editProductState._id}`, {
+                                    method: 'PUT',
+                                    body: formData
+                                });
+                                if(res.ok) {
+                                    const updatedProduct = await res.json();
+                                    setAdminProducts(prev => prev.map(p => p._id === updatedProduct._id ? updatedProduct : p));
+                                    setIsEditModalOpen(false);
+                                    alert('Successfully updated product!');
+                                } else {
+                                    const errorData = await res.json();
+                                    alert('Server Error: ' + (errorData.message || 'Could not update product.'));
+                                }
+                            } catch(e) { 
+                                console.error('Failed to update product', e); 
+                                alert('Network Error: ' + e.message);
+                            }
+                        }}
+                        style={{ padding: '0.8rem 1.5rem', borderRadius: '6px', border: 'none', background: '#10b981', color: 'white', fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }}
+                        onMouseOver={e => e.currentTarget.style.background = '#059669'}
+                        onMouseOut={e => e.currentTarget.style.background = '#10b981'}>
+                        Save Details
+                    </button>
+                </div>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmState && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'white', padding: '1.5rem 2rem', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', maxWidth: '400px', width: '90%', textAlign: 'center', animation: 'fadeIn 0.2s ease' }}>
+            <h3 style={{ margin: '0 0 1rem 0', color: '#1e293b', fontSize: '18px' }}>Confirm Delete</h3>
+            <p style={{ margin: '0 0 1.5rem 0', color: '#475569', fontSize: '15px' }}>Are you sure you want to permanently delete <strong>{deleteConfirmState.title}</strong>?</p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
+              <button 
+                onClick={() => setDeleteConfirmState(null)} 
+                style={{ padding: '0.6rem 1.2rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer', fontWeight: 600, color: '#334155' }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={async () => {
+                  try {
+                      const res = await fetch(`http://localhost:5000/api/products/${deleteConfirmState._id}`, { method: 'DELETE' });
+                      if (res.ok || res.status === 404) {
+                          setAdminProducts(prev => prev.filter(p => p._id !== deleteConfirmState._id));
+                      } else {
+                          const err = await res.json();
+                          alert('Failed to delete product: ' + err.message);
+                      }
+                  } catch(err) {
+                      alert('Network error while deleting.');
+                  }
+                  setDeleteConfirmState(null);
+                }} 
+                style={{ padding: '0.6rem 1.2rem', borderRadius: '6px', border: 'none', background: '#ef4444', color: 'white', cursor: 'pointer', fontWeight: 600 }}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Order Details Modal */}
+      {selectedOrderDetails && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.2s ease', backdropFilter: 'blur(2px)' }}>
+          <div style={{ background: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', maxWidth: '540px', width: '90%', position: 'relative' }}>
+             <button onClick={() => setSelectedOrderDetails(null)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', transition: 'color 0.2s' }} onMouseOver={e => e.currentTarget.style.color = '#0f172a'} onMouseOut={e => e.currentTarget.style.color = '#64748b'}><X size={24} /></button>
+             <h2 style={{ marginBottom: '1.5rem', color: '#0f172a', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>Order Details</h2>
+             
+             <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+               <div>
+                  <span style={{ display: 'block', fontSize: '0.85rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Order ID</span>
+                  <strong style={{ color: '#3b82f6', fontSize: '1.1rem' }}>{selectedOrderDetails.orderId}</strong>
+               </div>
+               <div>
+                 <select 
+                   value={selectedOrderDetails.status} 
+                   onChange={(e) => setStatusConfirmState({ orderId: selectedOrderDetails.orderId, newStatus: e.target.value })}
+                   style={{ padding: '8px 12px', borderRadius: '20px', outline: 'none', fontWeight: 600, cursor: 'pointer', ...getOrderBadgeStyle(selectedOrderDetails.status), transition: 'all 0.3s ease', appearance: 'none', textAlign: 'center' }}
+                 >
+                    <option value="Pending" style={{ background: 'white', color: '#d97706' }}>Pending</option>
+                    <option value="Confirmed" style={{ background: 'white', color: '#2563eb' }}>Confirmed</option>
+                    <option value="Printing" style={{ background: 'white', color: '#9333ea' }}>Printing</option>
+                    <option value="Delivered" style={{ background: 'white', color: '#16a34a' }}>Delivered</option>
+                 </select>
+               </div>
+             </div>
+
+             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div>
+                   <span style={{ display: 'block', fontSize: '0.85rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Customer Info</span>
+                   <div style={{ color: '#1e293b', fontWeight: 500, marginTop: '4px' }}>{selectedOrderDetails.customerName}</div>
+                   <div style={{ color: '#64748b', fontSize: '0.9rem' }}>{selectedOrderDetails.phone}</div>
+                </div>
+                <div>
+                  <span style={{ display: 'block', fontSize: '0.85rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Shipping Address</span>
+                  <div style={{ color: '#334155', fontSize: '0.9rem', marginTop: '4px', lineHeight: '1.4' }}>{selectedOrderDetails.address}</div>
+                </div>
+             </div>
+
+             <div style={{ background: '#f8fafc', padding: '1.2rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
+                <span style={{ display: 'block', fontSize: '0.85rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '12px' }}>Product Details</span>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                   <span style={{ color: '#64748b', fontSize: '0.9rem' }}>Product Name:</span>
+                   <span style={{ color: '#334155', fontWeight: 500 }}>{selectedOrderDetails.productName}</span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                   <span style={{ color: '#64748b', fontSize: '0.9rem' }}>Quantity:</span>
+                   <span style={{ color: '#334155', fontWeight: 500 }}>{selectedOrderDetails.quantity}</span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                   <span style={{ color: '#64748b', fontSize: '0.9rem' }}>Price per item:</span>
+                   <span style={{ color: '#334155', fontWeight: 500 }}>₹{(selectedOrderDetails.totalPrice / selectedOrderDetails.quantity).toLocaleString('en-IN')}</span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #cbd5e1', paddingTop: '12px' }}>
+                   <span style={{ color: '#334155', fontWeight: 600 }}>Total Amount:</span>
+                   <span style={{ color: '#0f172a', fontWeight: 700, fontSize: '1.1rem' }}>₹{selectedOrderDetails.totalPrice.toLocaleString('en-IN')}</span>
+                </div>
+             </div>
+
+             <div style={{ display: 'flex', gap: '2rem' }}>
+                 <div>
+                    <span style={{ display: 'block', fontSize: '0.85rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Payment Method</span>
+                    <div style={{ color: '#334155', fontWeight: 500, marginTop: '4px' }}>{selectedOrderDetails.paymentMethod}</div>
+                 </div>
+                 <div>
+                    <span style={{ display: 'block', fontSize: '0.85rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Payment Status</span>
+                    <div style={{ color: selectedOrderDetails.paymentStatus === 'Paid' ? '#16a34a' : '#d97706', fontWeight: 600, marginTop: '4px' }}>{selectedOrderDetails.paymentStatus}</div>
+                 </div>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Status Change Confirmation Modal */}
+      {statusConfirmState && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.2s ease' }}>
+          <div style={{ background: 'white', padding: '1.5rem 2rem', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', maxWidth: '400px', width: '90%', textAlign: 'center' }}>
+            <h3 style={{ margin: '0 0 1rem 0', color: '#1e293b', fontSize: '18px' }}>Confirm Status Change</h3>
+            <p style={{ margin: '0 0 1.5rem 0', color: '#475569', fontSize: '15px' }}>
+              Are you sure you want to change the status to <strong>{statusConfirmState.newStatus}</strong>?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
+              <button 
+                onClick={() => setStatusConfirmState(null)} 
+                style={{ padding: '0.6rem 1.2rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer', fontWeight: 600, color: '#334155' }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  handleUpdateOrderStatus(statusConfirmState.orderId, statusConfirmState.newStatus);
+                  setStatusConfirmState(null);
+                }} 
+                style={{ padding: '0.6rem 1.2rem', borderRadius: '6px', border: 'none', background: '#3b82f6', color: 'white', cursor: 'pointer', fontWeight: 600 }}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Details Modal */}
+      {selectedUserDetails && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.2s ease', backdropFilter: 'blur(2px)' }}>
+          <div style={{ background: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', maxWidth: '540px', width: '90%', position: 'relative' }}>
+             <button onClick={() => setSelectedUserDetails(null)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', transition: 'color 0.2s' }} onMouseOver={e => e.currentTarget.style.color = '#0f172a'} onMouseOut={e => e.currentTarget.style.color = '#64748b'}><X size={24} /></button>
+             <h2 style={{ marginBottom: '1.5rem', color: '#0f172a', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>User Details</h2>
+             
+             <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+               <div>
+                  <span style={{ display: 'block', fontSize: '0.85rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>User ID</span>
+                  <strong style={{ color: '#3b82f6', fontSize: '1.1rem' }}>{selectedUserDetails.id}</strong>
+               </div>
+               <div>
+                    <span style={{ 
+                      padding: '8px 16px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 600, 
+                      background: selectedUserDetails.status === 'Active' ? '#dcfce7' : '#fee2e2',
+                      color: selectedUserDetails.status === 'Active' ? '#16a34a' : '#ef4444',
+                      border: `1px solid ${selectedUserDetails.status === 'Active' ? '#bbf7d0' : '#fecaca'}`,
+                    }}>
+                      {selectedUserDetails.status}
+                    </span>
+               </div>
+             </div>
+
+             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div>
+                   <span style={{ display: 'block', fontSize: '0.85rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Contact Info</span>
+                   <div style={{ color: '#1e293b', fontWeight: 500, marginTop: '4px' }}>{selectedUserDetails.name}</div>
+                   <div style={{ color: '#64748b', fontSize: '0.9rem' }}>{selectedUserDetails.email}</div>
+                   <div style={{ color: '#64748b', fontSize: '0.9rem' }}>{selectedUserDetails.phone}</div>
+                </div>
+                <div>
+                  <span style={{ display: 'block', fontSize: '0.85rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Address</span>
+                  <div style={{ color: '#334155', fontSize: '0.9rem', marginTop: '4px', lineHeight: '1.4' }}>{selectedUserDetails.address}</div>
+                </div>
+             </div>
+
+             <div style={{ background: '#f8fafc', padding: '1.2rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
+                <span style={{ display: 'block', fontSize: '0.85rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '12px' }}>Account Activity</span>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                   <span style={{ color: '#64748b', fontSize: '0.9rem' }}>Total Orders:</span>
+                   <span style={{ color: '#334155', fontWeight: 500 }}>{selectedUserDetails.totalOrders}</span>
+                 </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #cbd5e1', paddingTop: '8px' }}>
+                   <span style={{ color: '#334155', fontWeight: 600 }}>Total Spending:</span>
+                   <span style={{ color: '#10b981', fontWeight: 700, fontSize: '1.1rem' }}>₹{selectedUserDetails.totalSpending.toLocaleString('en-IN')}</span>
+                </div>
+             </div>
+
+             <div>
+                 <span style={{ display: 'block', fontSize: '0.85rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '12px' }}>Recent Orders</span>
+                 <div style={{ display: 'grid', gap: '10px' }}>
+                     {selectedUserDetails.recentOrders.length > 0 ? selectedUserDetails.recentOrders.map(order => (
+                         <div 
+                           key={order.orderId} 
+                           onClick={() => setSelectedOrderDetails(order)}
+                           style={{ 
+                             background: '#fafafa', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', 
+                             cursor: 'pointer', transition: 'all 0.2s', display: 'flex', justifyContent: 'space-between', alignItems: 'center' 
+                           }}
+                           onMouseOver={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#f8fafc'; }}
+                           onMouseOut={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#fafafa'; }}
+                         >
+                           <div>
+                             <strong style={{ display: 'block', color: '#1e293b', fontSize: '1rem', marginBottom: '4px' }}>{order.productName}</strong>
+                             <div style={{ color: '#64748b', fontSize: '0.85rem', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                <span style={{ color: '#0f172a', fontWeight: 600 }}>₹{order.totalPrice.toLocaleString('en-IN')}</span>
+                                <span>&bull;</span>
+                                <span>{new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</span>
+                             </div>
+                           </div>
+                           <span style={{ 
+                               padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600, 
+                               ...getOrderBadgeStyle(order.status)
+                             }}>
+                               {order.status}
+                           </span>
+                         </div>
+                     )) : (
+                         <div style={{ color: '#94a3b8', fontSize: '0.95rem', padding: '16px', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+                           No recent orders
+                         </div>
+                     )}
+                 </div>
+             </div>
+             
+             <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
+                <button 
+                  onClick={() => toggleUserStatus(selectedUserDetails.id, selectedUserDetails.status)}
+                  style={{ padding: '0.8rem 1.5rem', borderRadius: '6px', border: 'none', background: selectedUserDetails.status === 'Active' ? '#fee2e2' : '#dcfce7', color: selectedUserDetails.status === 'Active' ? '#ef4444' : '#16a34a', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', width: '100%' }}
+                >
+                  {selectedUserDetails.status === 'Active' ? 'Block User Account' : 'Unblock User Account'}
+                </button>
+             </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};
+
+export default AdminDashboard;
