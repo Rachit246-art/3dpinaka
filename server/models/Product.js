@@ -10,10 +10,24 @@ const productSchema = new mongoose.Schema({
   tags: { type: String },
   badgeStyle: { type: Object },
   inStock: { type: Boolean, default: true },
+  featured: { type: Boolean, default: false },
   brand: { type: String, required: true },
   condition: { type: String, enum: ['New', 'Refurbished'], default: 'New' },
-  specs: [{ label: String, value: String }],
-  description: { type: String }
+  description: { type: String },
+  specifications: [
+    {
+      key: { type: String },
+      value: { type: String }
+    }
+  ],
+  reviews: [
+    {
+      userName: { type: String },
+      rating: { type: Number },
+      comment: { type: String },
+      createdAt: { type: Date, default: Date.now }
+    }
+  ]
 }, { timestamps: true });
 
 const Product = mongoose.model('Product', productSchema);

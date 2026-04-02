@@ -1,417 +1,351 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, WhatsappLogo, Heart, FunnelSimple, CaretDown, X } from '@phosphor-icons/react';
-import { BRANDS } from '../constants/data';
+import { ArrowLeft, WhatsappLogo, FunnelSimple, CaretDown, X } from '@phosphor-icons/react';
 import { cartService } from '../services/cartService';
+import { getImageUrl } from '../utils/imageUtils';
+
+const parsePriceLocal = (price) => {
+  if (!price) return 0;
+  return Number(price.toString().replace(/[^0-9.-]+/g, ""));
+};
 
 const Products = () => {
-    const [searchParams, setSearchParams] = useSearchParams();
-    const revealRefs = useRef([]);
-    const [showFilter, setShowFilter] = useState(true);
-    const [sortBy, setSortBy] = useState('best');
-    const [sortOpen, setSortOpen] = useState(false);
-    
-    const [dbProducts, setDbProducts] = useState([]);
+    const [searchParams] = useSearchParams();
+    const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [showFilter, setShowFilter] = useState(true);
     
-    // Filters - synced with URL
-    const ALL_CATS = useMemo(() => ['3D Printer', 'Filament', 'Resin', 'Accessory', 'Spare Parts', '3D Pen', '3D Scanner', 'Laser Engraver', 'CNC Router', 'Food Printer', 'Robotics', 'Safety'], []);
-    const ALL_BRANDS = useMemo(() => BRANDS.map(b => b.name.toLowerCase()), []);
+    // 1. FILTER STATE (INITIALIZED FROM URL)
+    const [filters, setFilters] = useState(() => {
+        const brand = searchParams.get('brand');
+        const category = searchParams.get('category');
+        const sort = searchParams.get('sort');
+        return {
+            brand: brand ? [brand] : [],
+            category: category ? [category] : [],
+            availability: [],
+            minPrice: "",
+            maxPrice: "",
+            sort: sort || ""
+        };
+    });
 
-    // Filters - synced with URL
-    const selectedBrands = useMemo(() => {
-        const b = searchParams.get('brand');
-        return b ? b.toLowerCase().split(',') : ALL_BRANDS;
-    }, [searchParams, ALL_BRANDS]);
-
-    const selectedCats = useMemo(() => {
-        const c = searchParams.get('category');
-        return c ? c.toLowerCase().split(',') : ALL_CATS.map(cat => cat.toLowerCase());
-    }, [searchParams, ALL_CATS]);
-
-    const [availabilityFilter, setAvailabilityFilter] = useState([]);
-    const [minPrice, setMinPrice] = useState(0);
-    const [maxPriceVal, setMaxPriceVal] = useState(1000000);
+    // Sync filters when searchParams change (navigation-based filtering)
     useEffect(() => {
-        const fetchFilteredProducts = async () => {
+        const brand = searchParams.get('brand');
+        const category = searchParams.get('category');
+        const sort = searchParams.get('sort');
+        
+        setFilters(prev => {
+            // Only update if searchParams actually changed from current state to avoid infinite loops
+            const brandMatch = brand ? (prev.brand.length === 1 && prev.brand[0].toLowerCase() === brand.toLowerCase()) : (prev.brand.length === 0);
+            const catMatch = category ? (prev.category.length === 1 && prev.category[0].toLowerCase() === category.toLowerCase()) : (prev.category.length === 0);
+            
+            if (brandMatch && catMatch && (sort || "") === prev.sort) return prev;
+
+            return {
+                ...prev,
+                brand: brand ? [brand] : [],
+                category: category ? [category] : [],
+                sort: sort || prev.sort
+            };
+        });
+    }, [searchParams]);
+
+    // 2. META STATE (DYNAMIC OPTIONS)
+    const [meta, setMeta] = useState({
+        brands: [],
+        categories: []
+    });
+
+    const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+    // 3. LOAD META OPTIONS
+    useEffect(() => {
+        fetch(`${BASE_URL}/api/products/meta`)
+            .then(res => res.json())
+            .then(data => {
+                console.log("Loaded Meta:", data);
+                setMeta(data);
+            })
+            .catch(err => console.error("Meta fetch error:", err));
+    }, [BASE_URL]);
+
+    // 4. API CALL (LOAD PRODUCTS)
+    useEffect(() => {
+        const fetchProducts = async () => {
             setLoading(true);
             try {
-                const b = searchParams.get('brand');
-                const c = searchParams.get('category');
-                const q = searchParams.get('q');
-                const cond = searchParams.get('condition');
-                
-                let queryStr = '';
-                if (b) queryStr += `brand=${b.toLowerCase()}&`;
-                if (c) queryStr += `category=${c}&`;
-                if (q) queryStr += `q=${q}&`;
-                if (cond) queryStr += `condition=${cond}&`;
-                
-                // If exactly 1 filter is selected, send it. If 0 or 2, send nothing (show all)
-                if (availabilityFilter.length === 1) {
-                    queryStr += `availability=${availabilityFilter[0]}&`;
+                const query = new URLSearchParams();
+
+                if (filters.brand.length > 0) {
+                    query.append("brand", filters.brand.join(","));
                 }
-                
-                const res = await fetch(`http://localhost:5000/api/products?${queryStr.replace(/&$/, '')}`);
+                if (filters.category.length > 0) {
+                    query.append("category", filters.category.join(","));
+                }
+
+                if (filters.availability.length === 1) {
+                    const value = filters.availability[0] === "In Stock" ? "in" : "out";
+                    query.append("availability", value);
+                }
+
+                if (filters.minPrice) query.append("minPrice", filters.minPrice);
+                if (filters.maxPrice) query.append("maxPrice", filters.maxPrice);
+                if (filters.sort) query.append("sort", filters.sort);
+
+                // Handle search and condition from URL
+                const cond = searchParams.get('condition');
+                if (cond) query.append('condition', cond);
+                const q = searchParams.get('q');
+                if (q) query.append('q', q);
+
+                const url = `${BASE_URL}/api/products?${query.toString()}`;
+                console.log("Fetching Products:", url);
+
+                const res = await fetch(url);
                 if (res.ok) {
-                    setDbProducts(await res.json());
+                    const data = await res.json();
+                    setProducts(data);
                 }
             } catch (err) {
-                console.error("Fetch error:", err);
+                console.error("Products fetch error:", err);
             } finally {
                 setLoading(false);
             }
         };
-        fetchFilteredProducts();
-    }, [searchParams, availabilityFilter]);
+        fetchProducts();
+    }, [filters, searchParams, BASE_URL]);
 
-    const toggleBrand = (brand) => {
-        const bLow = brand.toLowerCase();
-        const newParams = new URLSearchParams(searchParams);
-        const current = searchParams.get('brand') ? selectedBrands : ALL_BRANDS;
-        const next = current.includes(bLow) ? current.filter(b => b !== bLow) : [...current, bLow];
-        
-        if (next.length === ALL_BRANDS.length || next.length === 0) newParams.delete('brand');
-        else newParams.set('brand', next.join(','));
-        setSearchParams(newParams);
-    };
+    const normalize = (val) => val?.toLowerCase().trim() || "";
 
-    const toggleCat = (cat) => {
-        const cLow = cat.toLowerCase();
-        const newParams = new URLSearchParams(searchParams);
-        const current = searchParams.get('category') ? selectedCats : ALL_CATS.map(c => c.toLowerCase());
-        const next = current.includes(cLow) ? current.filter(c => c !== cLow) : [...current, cLow];
-        
-        if (next.length === ALL_CATS.length || next.length === 0) newParams.delete('category');
-        else newParams.set('category', next.join(','));
-        setSearchParams(newParams);
-    };
-
-    const parsePriceLocal = (p) => typeof p === 'number' ? p : (parseInt(String(p).replace(/[^0-9]/g, '')) || 0);
-    const realMaxPrice = useMemo(() => Math.max(...dbProducts.map(p => parsePriceLocal(p.price)), 1000000), [dbProducts]);
-    const realMinPrice = useMemo(() => Math.min(...dbProducts.map(p => parsePriceLocal(p.price)), 0), [dbProducts]);
-
-    useEffect(() => {
-        if (dbProducts.length > 0) {
-            setMaxPriceVal(realMaxPrice);
-            setMinPrice(realMinPrice);
-        }
-    }, [realMaxPrice, realMinPrice, dbProducts]);
-
-    const products = useMemo(() => {
-        let filtered = [...dbProducts];
-
-        // Availability filtering is handled by the backend API.
-        // Frontend handles visibility and price/sort logic.
-
-        filtered = filtered.filter(p => {
-            const pr = parsePriceLocal(p.price);
-            // Safety: if maxPriceVal looks like it hasn't updated to match real data yet, don't filter.
-            if (maxPriceVal === 1000000 && pr > 1000000) return true;
-            return pr >= minPrice && pr <= maxPriceVal;
+    const updateFilter = (type, value) => {
+        setFilters(prev => {
+            const val = normalize(value);
+            const exists = prev[type].some(v => normalize(v) === val);
+            const updated = exists
+                ? prev[type].filter(v => normalize(v) !== val)
+                : [...prev[type], value];
+            return { ...prev, [type]: updated };
         });
-        console.log(`Grid Refresh: ${filtered.length} products ready for reveal.`);
-
-        switch (sortBy) {
-            case 'az': filtered.sort((a, b) => (a.name || a.title).localeCompare(b.name || b.title)); break;
-            case 'za': filtered.sort((a, b) => (b.name || b.title).localeCompare(a.name || a.title)); break;
-            case 'price_asc': filtered.sort((a, b) => parsePriceLocal(a.price) - parsePriceLocal(b.price)); break;
-            case 'price_desc': filtered.sort((a, b) => parsePriceLocal(b.price) - parsePriceLocal(a.price)); break;
-            default: break;
-        }
-
-        return filtered;
-    }, [dbProducts, minPrice, maxPriceVal, sortBy, availabilityFilter]);
-
-    useEffect(() => {
-        if (loading) return;
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('active');
-                }
-            });
-        }, { threshold: 0.1 });
-
-        const timer = setTimeout(() => {
-            revealRefs.current.forEach(el => {
-                if (el) {
-                    el.classList.remove('active');
-                    observer.observe(el);
-                }
-            });
-        }, 200);
-
-        return () => {
-            clearTimeout(timer);
-            observer.disconnect();
-        };
-    }, [products, searchParams, loading, minPrice, maxPriceVal, availabilityFilter]);
-
-    const [wishlist, setWishlist] = useState([]);
-    useEffect(() => {
-        const updateWishlist = () => setWishlist(cartService.getWishlistItems());
-        updateWishlist();
-        window.addEventListener('wishlistUpdated', updateWishlist);
-        return () => window.removeEventListener('wishlistUpdated', updateWishlist);
-    }, []);
-
-    const addToRevealRefs = (el) => {
-        if (el && !revealRefs.current.includes(el)) {
-            revealRefs.current.push(el);
-        }
     };
 
-    const activeTags = [
-        ...(availabilityFilter.length === 1 ? availabilityFilter.map(a => ({ 
-            type: 'availability', 
-            value: a, 
-            label: `Availability: ${a === 'inStock' ? 'In stock' : 'Out of stock'}` 
-        })) : []),
-        ...(searchParams.has('brand') && selectedBrands.length < ALL_BRANDS.length ? selectedBrands.map(b => ({ type: 'brand', value: b, label: `Brand: ${b}` })) : []),
-        ...(searchParams.has('category') && selectedCats.length < ALL_CATS.length ? selectedCats.map(c => ({ type: 'cat', value: c, label: `Category: ${c}` })) : []),
-        ...(searchParams.has('q') ? [{ type: 'search', value: searchParams.get('q'), label: `Search: ${searchParams.get('q')}` }] : []),
-        ...(searchParams.has('condition') ? [{ type: 'condition', value: searchParams.get('condition'), label: `Store: ${searchParams.get('condition')}` }] : [])
-    ];
-
-    const removeTag = (tag) => {
-        const newParams = new URLSearchParams(searchParams);
-        if (tag.type === 'brand') {
-            const next = selectedBrands.filter(b => b !== tag.value.toLowerCase());
-            if (next.length === 0 || next.length === ALL_BRANDS.length) newParams.delete('brand');
-            else newParams.set('brand', next.join(','));
-        }
-        if (tag.type === 'cat') {
-            const next = selectedCats.filter(c => c !== tag.value.toLowerCase());
-            if (next.length === 0 || next.length === ALL_CATS.length) newParams.delete('category');
-            else newParams.set('category', next.join(','));
-        }
-        if (tag.type === 'availability') setAvailabilityFilter(prev => prev.filter(v => v !== tag.value));
-        if (tag.type === 'search') newParams.delete('q');
-        if (tag.type === 'condition') newParams.delete('condition');
-        setSearchParams(newParams);
-    };
-
-    const clearAll = () => {
-        const newParams = new URLSearchParams();
-        const cond = searchParams.get('condition');
-        if (cond) newParams.set('condition', cond);
-        setSearchParams(newParams);
-        setAvailabilityFilter([]);
-        setMinPrice(realMinPrice);
-        setMaxPriceVal(realMaxPrice);
-    };
-
-    const renderGrid = () => {
-        revealRefs.current = [];
-        return (
-            <div className={`products-grid ${showFilter ? '' : 'full-width'}`} style={{ flex: 1 }}>
-                {products.length > 0 ? products.map((product) => (
-                    <div key={product._id || product.id} className={`product-card reveal ${!product.inStock ? 'sold-out' : ''}`} ref={addToRevealRefs}>
-                        <button 
-                            className={`wishlist-btn ${wishlist.some(item => (item.name || item.title || '').toLowerCase() === (product.name || product.title || '').toLowerCase()) ? 'active' : ''}`} 
-                            onClick={() => cartService.toggleWishlist(product)}
-                            title="Add to Wishlist"
-                        >
-                            <Heart size={20} weight={wishlist.some(item => (item.name || item.title || '').toLowerCase() === (product.name || product.title || '').toLowerCase()) ? "fill" : "bold"} />
-                        </button>
-                        {product.badge && (
-                            <div className="badge" style={product.badgeStyle}>{product.badge}</div>
-                        )}
-                        <div className="product-img-wrapper" style={{ position: 'relative' }}>
-                            <img 
-                                src={product.image?.startsWith('/uploads') ? `http://localhost:5000${product.image}` : (product.image || 'https://via.placeholder.com/300x300?text=No+Image')} 
-                                alt={product.name || product.title} 
-                                className="product-img" 
-                                onError={(e) => { e.target.src = 'https://via.placeholder.com/300x300?text=Image+Not+Found'; }}
-                            />
-                            {!product.inStock && (
-                                <div className="sold-out-overlay">
-                                    <div className="sold-out-circle">Sold Out</div>
-                                </div>
-                            )}
-                        </div>
-                        <div className="product-info">
-                            <div className="product-cat">{product.category} {product.brand && `| ${product.brand}`}</div>
-                            <div className="product-title">{product.name || product.title || "Unnamed Product"}</div>
-                            <div className="stars">
-                                {typeof product.rating === 'number' ? 
-                                    ('★'.repeat(Math.floor(product.rating)) + '☆'.repeat(5 - Math.floor(product.rating)) + ` (${product.rating.toFixed(1)})`) : 
-                                    (product.stars || '★★★★★ (5.0)')
-                                }
-                            </div>
-                            <div className="product-price">
-                                ₹{Number(parsePriceLocal(product.price || 0)).toLocaleString('en-IN')}
-                                {(product.mrp || product.oldPrice) && (
-                                    <>
-                                        <span className="mrp-label">MRP: ₹{parsePriceLocal(product.mrp || product.oldPrice).toLocaleString('en-IN')}</span>
-                                        {(() => {
-                                            const cur = parsePriceLocal(product.price);
-                                            const old = parsePriceLocal(product.mrp || product.oldPrice);
-                                            const off = Math.round(((old - cur) / old) * 100);
-                                            return off > 0 ? <span className="off-badge">{off}% Off</span> : null;
-                                        })()}
-                                    </>
-                                )}
-                                {!product.inStock && <span className="out-of-stock-label">Out Of Stock</span>}
-                            </div>
-                            {product.inStock ? (
-                                <button className="btn btn-block" onClick={() => cartService.addToCart(product)}>Add to Cart</button>
-                            ) : (
-                                <button className="btn btn-block" disabled style={{ background: '#94a3b8', color: 'white', cursor: 'not-allowed' }}>Out of Stock</button>
-                            )}
-                        </div>
-                    </div>
-                )) : (
-                    <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem', color: '#64748b' }}>
-                        No products match your current filters.
-                    </div>
-                )}
-            </div>
-        );
-    };
+    const clearAll = () => setFilters({
+        brand: [],
+        category: [],
+        availability: [],
+        minPrice: "",
+        maxPrice: "",
+        sort: filters.sort
+    });
 
     return (
         <main>
+            {/* Header */}
             <div style={{ background: 'var(--dark-bg)', padding: '4rem 0', textAlign: 'center', color: 'white' }}>
-                <Link to="/" className="back-home-btn"><ArrowLeft /> Back to Home</Link>
-                <h1>{searchParams.get('condition') === 'Refurbished' ? `Refurbished ${searchParams.get('category') || ''} Store` : activeTags.length === 1 ? activeTags[0].label : 'All 3D Printers'}</h1>
-                <p style={{ color: '#94a3b8', marginTop: '1rem' }}>Professional FDM, Resin & Industrial Graded Printers</p>
+                <Link to="/" className="back-home-btn" style={{ textDecoration: 'none', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <ArrowLeft size={18} /> Back to Home
+                </Link>
+                <h1 style={{ marginTop: '1.5rem', fontSize: '2.5rem' }}>
+                    {searchParams.get('condition') === 'Refurbished' ? 'Refurbished Store' : 'All 3D Printers'}
+                </h1>
+                <p style={{ color: '#94a3b8', marginTop: '1rem' }}>Professional 3D Printing solutions by 3DPINAKA</p>
             </div>
 
             <section className="section container">
-                <div className="filter-topbar">
-                    <button className="filter-toggle-btn" onClick={() => setShowFilter(!showFilter)}>
+                {/* Topbar: Filter Toggle + Sort */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', padding: '20px', background: '#f8fafc', borderRadius: '12px' }}>
+                    <button 
+                        onClick={() => setShowFilter(!showFilter)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', border: '1px solid #e2e8f0', borderRadius: '8px', background: 'white', fontWeight: 600, cursor: 'pointer' }}
+                    >
                         <FunnelSimple size={18} weight="bold" />
-                        {showFilter ? 'Hide filter' : 'Show filter'}
+                        {showFilter ? 'Hide Filters' : 'Show Filters'}
                     </button>
-                    <div className="sort-wrapper">
-                        <span className="sort-label">Sort by:</span>
-                        <div className="sort-dropdown" onClick={() => setSortOpen(!sortOpen)}>
-                            <span>{sortBy === 'best' ? 'Best selling' : sortBy === 'az' ? 'Alphabetically, A-Z' : sortBy === 'za' ? 'Alphabetically, Z-A' : sortBy === 'price_asc' ? 'Price, low to high' : 'Price, high to low'}</span>
-                            <CaretDown size={16} />
-                            {sortOpen && (
-                                <div className="sort-menu">
-                                    {[
-                                        { label: 'Best selling', value: 'best' },
-                                        { label: 'Alphabetically, A-Z', value: 'az' },
-                                        { label: 'Alphabetically, Z-A', value: 'za' },
-                                        { label: 'Price, low to high', value: 'price_asc' },
-                                        { label: 'Price, high to low', value: 'price_desc' },
-                                    ].map(opt => (
-                                        <div key={opt.value} className={`sort-option ${sortBy === opt.value ? 'active' : ''}`}
-                                            onClick={(e) => { e.stopPropagation(); setSortBy(opt.value); setSortOpen(false); }}>
-                                            {opt.label}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ fontWeight: 600, color: '#64748b' }}>Sort by:</span>
+                        <select 
+                            value={filters.sort}
+                            onChange={(e) => setFilters(prev => ({ ...prev, sort: e.target.value }))}
+                            style={{ padding: '10px 15px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', outline: 'none' }}
+                        >
+                            <option value="">Best Selling</option>
+                            <option value="low">Price: Low to High</option>
+                            <option value="high">Price: High to Low</option>
+                            <option value="az">Alphabetically, A-Z</option>
+                            <option value="za">Alphabetically, Z-A</option>
+                        </select>
                     </div>
                 </div>
 
-                {activeTags.length > 0 && (
-                    <div className="active-tags">
-                        {activeTags.map((tag, i) => (
-                            <span key={i} className="tag-pill">{tag.label} <X size={14} weight="bold" onClick={() => removeTag(tag)} /></span>
-                        ))}
-                        <button className="tag-clear" onClick={clearAll}>Remove all</button>
-                    </div>
-                )}
-
-                <div className="filter-layout">
+                <div style={{ display: 'flex', gap: '40px' }}>
+                    {/* Sidebar Filters */}
                     {showFilter && (
-                        <aside className="filter-sidebar">
-                            <div className="filter-section">
-                                <div className="filter-section-header">
-                                    <h4>Availability</h4>
-                                </div>
-                                <label className="filter-checkbox">
-                                    <input type="checkbox" checked={availabilityFilter.includes('inStock')} onChange={() => setAvailabilityFilter(prev => prev.includes('inStock') ? prev.filter(v => v !== 'inStock') : [...prev, 'inStock'])} />
+                        <aside style={{ width: '280px', flexShrink: 0 }}>
+                            {/* Availability */}
+                            <div style={{ marginBottom: '30px', borderBottom: '1px solid #f1f5f9', paddingBottom: '20px' }}>
+                                <h4 style={{ marginBottom: '15px', color: '#1e293b' }}>Availability</h4>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '10px' }}>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={filters.availability.some(v => normalize(v) === normalize('In Stock'))} 
+                                        onChange={() => updateFilter('availability', 'In Stock')} 
+                                        style={{ width: '18px', height: '18px' }} 
+                                    />
                                     <span>In Stock</span>
                                 </label>
-                                <label className="filter-checkbox">
-                                    <input type="checkbox" checked={availabilityFilter.includes('outOfStock')} onChange={() => setAvailabilityFilter(prev => prev.includes('outOfStock') ? prev.filter(v => v !== 'outOfStock') : [...prev, 'outOfStock'])} />
-                                    <span>Out Of Stock</span>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={filters.availability.some(v => normalize(v) === normalize('Out of Stock'))} 
+                                        onChange={() => updateFilter('availability', 'Out of Stock')} 
+                                        style={{ width: '18px', height: '18px' }} 
+                                    />
+                                    <span>Out of Stock</span>
                                 </label>
                             </div>
-                            <div className="filter-section">
-                                <div className="filter-section-header"><h4>Category</h4></div>
-                                <div className="filter-scroll-area">
-                                    <label className="filter-checkbox all-option">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={!searchParams.has('category') || selectedCats.length === ALL_CATS.length} 
-                                            onChange={() => {
-                                                const newParams = new URLSearchParams(searchParams);
-                                                newParams.delete('category');
-                                                setSearchParams(newParams);
-                                            }} 
-                                        />
-                                        <span style={{ fontWeight: 600 }}>All</span>
-                                    </label>
-                                    {ALL_CATS.map(cat => (
-                                        <label key={cat} className="filter-checkbox">
-                                            <input type="checkbox" checked={selectedCats.includes(cat.toLowerCase())} onChange={() => toggleCat(cat)} />
+
+                            {/* Categories (Dynamic) */}
+                            <div style={{ marginBottom: '30px', borderBottom: '1px solid #f1f5f9', paddingBottom: '20px' }}>
+                                <h4 style={{ marginBottom: '15px', color: '#1e293b' }}>Categories</h4>
+                                <div style={{ maxHeight: '250px', overflowY: 'auto', paddingRight: '10px' }}>
+                                    {meta.categories.map(cat => (
+                                        <label key={cat} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '10px' }}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={filters.category.some(v => normalize(v) === normalize(cat))} 
+                                                onChange={() => updateFilter('category', cat)} 
+                                                style={{ width: '18px', height: '18px' }} 
+                                            />
                                             <span>{cat}</span>
                                         </label>
                                     ))}
                                 </div>
                             </div>
-                            <div className="filter-section">
-                                <div className="filter-section-header"><h4>Brand</h4></div>
-                                <div className="filter-scroll-area">
-                                    <label className="filter-checkbox all-option">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={!searchParams.has('brand') || selectedBrands.length === ALL_BRANDS.length} 
-                                            onChange={() => {
-                                                const newParams = new URLSearchParams(searchParams);
-                                                newParams.delete('brand');
-                                                setSearchParams(newParams);
-                                            }} 
-                                        />
-                                        <span style={{ fontWeight: 600 }}>All</span>
-                                    </label>
-                                    {BRANDS.map(b => (
-                                        <label key={b.path} className="filter-checkbox">
-                                            <input type="checkbox" checked={selectedBrands.includes(b.name.toLowerCase())} onChange={() => toggleBrand(b.name)} />
-                                            <span>{b.name}</span>
+
+                            {/* Brands (Dynamic) */}
+                            <div style={{ marginBottom: '30px', borderBottom: '1px solid #f1f5f9', paddingBottom: '20px' }}>
+                                <h4 style={{ marginBottom: '15px', color: '#1e293b' }}>Brands</h4>
+                                <div style={{ maxHeight: '250px', overflowY: 'auto', paddingRight: '10px' }}>
+                                    {meta.brands.map(brand => (
+                                        <label key={brand} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginBottom: '10px' }}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={filters.brand.some(v => normalize(v) === normalize(brand))} 
+                                                onChange={() => updateFilter('brand', brand)} 
+                                                style={{ width: '18px', height: '18px' }} 
+                                            />
+                                            <span>{brand}</span>
                                         </label>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className="filter-section">
-                                <div className="filter-section-header"><h4>Price</h4></div>
-                                <div className="dual-range-container">
-                                    <div className="range-marks">
-                                        <span>₹{realMinPrice.toLocaleString()}</span>
-                                        <span>₹{realMaxPrice.toLocaleString()}</span>
-                                    </div>
-                                    <div className="dual-range-track">
-                                        <div className="dual-range-fill" style={{
-                                            left: `${((minPrice - realMinPrice) / (realMaxPrice - realMinPrice)) * 100}%`,
-                                            right: `${100 - ((maxPriceVal - realMinPrice) / (realMaxPrice - realMinPrice)) * 100}%`
-                                        }}></div>
-                                    </div>
-                                    <input type="range" className="dual-range-input" min={realMinPrice} max={realMaxPrice} value={minPrice} onChange={(e) => setMinPrice(Math.min(parseInt(e.target.value), maxPriceVal))} />
-                                    <input type="range" className="dual-range-input" min={realMinPrice} max={realMaxPrice} value={maxPriceVal} onChange={(e) => setMaxPriceVal(Math.max(parseInt(e.target.value), minPrice))} />
+                            {/* Price Range */}
+                            <div style={{ marginBottom: '30px' }}>
+                                <h4 style={{ marginBottom: '15px', color: '#1e293b' }}>Price Range</h4>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <input 
+                                        type="number" 
+                                        placeholder="Min" 
+                                        value={filters.minPrice} 
+                                        onChange={(e) => setFilters(prev => ({ ...prev, minPrice: e.target.value }))}
+                                        style={{ width: '50%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px' }}
+                                    />
+                                    <input 
+                                        type="number" 
+                                        placeholder="Max" 
+                                        value={filters.maxPrice} 
+                                        onChange={(e) => setFilters(prev => ({ ...prev, maxPrice: e.target.value }))}
+                                        style={{ width: '50%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px' }}
+                                    />
                                 </div>
-                                <p className="price-range-label">Price: ₹{minPrice.toLocaleString('en-IN')} - ₹{maxPriceVal.toLocaleString('en-IN')}</p>
+                                <button 
+                                    onClick={clearAll}
+                                    style={{ marginTop: '20px', width: '100%', padding: '12px', border: 'none', borderRadius: '8px', background: '#f1f5f9', color: '#1e293b', fontWeight: 600, cursor: 'pointer' }}
+                                >
+                                    Reset Filters
+                                </button>
                             </div>
                         </aside>
                     )}
 
+                    {/* Products Grid */}
+                    <div style={{ flex: 1 }}>
                         {loading ? (
-                            <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
                                 <div className="loading-spinner"></div>
                             </div>
-                        ) : renderGrid()}
+                        ) : (
+                            <>
+                                <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <h3 style={{ fontSize: '1.5rem', color: '#1e293b' }}>Showing {products.length} Products</h3>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '30px' }}>
+                                    {products.length > 0 ? (
+                                        products.map(product => (
+                                            <div key={product._id} style={{ background: 'white', borderRadius: '15px', padding: '20px', border: '1px solid #f1f5f9', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', transition: 'transform 0.2s', position: 'relative' }}>
+                                                <Link to={`/product/${product._id}`} style={{ textDecoration: 'none', display: 'block' }}>
+                                                    <div className="image-wrapper" style={{ height: '220px', marginBottom: '15px' }}>
+                                                        <img 
+                                                            src={
+                                                                product.name === "Refurbished Bambu Lab A1 Mini 3D Printer" 
+                                                                ? getImageUrl(product.image).replace(/\s/g, "%20").replace(/\/\//g, "/")
+                                                                : getImageUrl(product.image)
+                                                            }
+                                                            alt={product.name}
+                                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                            onError={(e) => { 
+                                                                if(product.name === "Refurbished Bambu Lab A1 Mini 3D Printer") {
+                                                                    console.error("Image failed for specific product:", product.image);
+                                                                }
+                                                                e.target.onerror = null; 
+                                                                e.target.src = '/fallback.png'; 
+                                                            }}
+                                                        />
+                                                        {!product.inStock && (
+                                                            <div className="stock-badge">
+                                                                OUT OF STOCK
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '5px' }}>
+                                                        {product.category} | {product.brand}
+                                                    </div>
+                                                    <h3 style={{ fontSize: '1.1rem', color: '#1e293b', marginBottom: '10px', height: '2.8rem', overflow: 'hidden' }}>{product.name}</h3>
+                                                    <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#2563eb' }}>
+                                                        ₹{parsePriceLocal(product.price).toLocaleString('en-IN')}
+                                                    </div>
+                                                </Link>
+                                                <button 
+                                                    disabled={!product.inStock}
+                                                    onClick={() => cartService.addToCart(product)}
+                                                    style={{ width: '100%', marginTop: '15px', padding: '12px', borderRadius: '10px', border: 'none', background: product.inStock ? '#111827' : '#94a3b8', color: 'white', fontWeight: 600, cursor: product.inStock ? 'pointer' : 'not-allowed' }}
+                                                >
+                                                    {product.inStock ? 'Add to Cart' : 'Out of Stock'}
+                                                </button>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '100px 0' }}>
+                                            <FunnelSimple size={60} style={{ opacity: 0.2, marginBottom: '20px' }} />
+                                            <h3>No products matches your filters</h3>
+                                            <p style={{ color: '#64748b' }}>Try clearing some filters or search for something else.</p>
+                                            <button onClick={clearAll} style={{ marginTop: '20px', padding: '10px 25px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}>Clear All</button>
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </div>
-                </section>
-            
-            <a href="https://wa.me/918299475268" className="whatsapp-float" target="_blank" rel="noreferrer"><WhatsappLogo size={32} /></a>
+                </div>
+            </section>
+
+            <a href="https://wa.me/918299475268" style={{ position: 'fixed', bottom: '30px', right: '30px', background: '#25d366', color: 'white', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', zIndex: 1000 }} target="_blank" rel="noreferrer">
+                <WhatsappLogo size={32} weight="fill" />
+            </a>
         </main>
     );
 };

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Trash, ShoppingCart, Heart, WhatsappLogo } from '@phosphor-icons/react';
 import { cartService, WISHLIST_UPDATED } from '../services/cartService';
+import { getImageUrl } from '../utils/imageUtils';
 
 const Wishlist = () => {
     const [wishlistItems, setWishlistItems] = useState([]);
@@ -57,7 +58,15 @@ const Wishlist = () => {
                                 <button className="wishlist-btn active" onClick={() => removeItem(item.id)}>
                                     <Trash size={18} weight="bold" />
                                 </button>
-                                <img src={item.image} alt={item.title} className="product-img" style={{ height: '200px' }} />
+                                <div className="product-img-wrapper" style={{ height: '200px' }}>
+                                    <img 
+                                        src={getImageUrl(item.image)} 
+                                        alt={item.title} 
+                                        className="product-img" 
+                                        style={{ height: '100%', width: '100%', objectFit: 'contain' }} 
+                                        onError={(e) => { e.target.onerror = null; e.target.src = '/fallback.png'; }}
+                                    />
+                                </div>
                                 <div className="product-info" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                                     <h5 className="product-title" style={{ fontSize: '1rem', marginBottom: '10px' }}>{item.title}</h5>
                                     <div className="product-price" style={{ marginBottom: '15px' }}>{item.price}</div>

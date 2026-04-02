@@ -19,9 +19,9 @@ const Header = ({ user, cartCount, wishlistCount, toggleMobileMenu }) => {
         <nav className="nav-links">
           <Link to="/">Home</Link>
           <div className="dropdown">
-            <a href="javascript:void(0)" className="dropbtn">
+            <span className="dropbtn" style={{ cursor: 'pointer' }}>
               Products <CaretDown size={14} weight="bold" />
-            </a>
+            </span>
             <div className="dropdown-content mega-menu">
               <div className="mega-menu-grid">
                 <div className="mega-col">

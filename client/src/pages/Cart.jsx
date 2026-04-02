@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Trash, ShoppingCart, WhatsappLogo } from '@phosphor-icons/react';
 import { cartService } from '../services/cartService';
+import { getImageUrl } from '../utils/imageUtils';
 
 const Cart = () => {
     const [cartItems, setCartItems] = useState([]);
@@ -52,7 +53,12 @@ const Cart = () => {
                     ) : (
                         cartItems.map((item, index) => (
                             <div key={index} className="cart-item" style={{ display: 'flex', alignItems: 'center', gap: '20px', padding: '20px', border: '1px solid var(--border-color)', borderRadius: '12px', marginBottom: '20px', boxShadow: '0 4px 6px rgba(0,0,0,0.02)' }}>
-                                <img src={item.image} alt={item.title} style={{ width: '100px', height: '100px', objectFit: 'contain', borderRadius: '8px', background: 'var(--light-bg)' }} />
+                                <img 
+                                    src={getImageUrl(item.image)} 
+                                    alt={item.title} 
+                                    onError={(e) => { e.target.onerror = null; e.target.src = '/fallback.png'; }}
+                                    style={{ width: '100px', height: '100px', objectFit: 'contain', borderRadius: '8px', background: 'var(--light-bg)' }} 
+                                />
                                 <div className="cart-item-info" style={{ flex: 1 }}>
                                     <h3 style={{ marginBottom: '5px' }}>{item.title}</h3>
                                     <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--primary)' }}>{item.price}</div>

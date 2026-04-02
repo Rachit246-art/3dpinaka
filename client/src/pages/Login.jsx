@@ -212,7 +212,7 @@ const Login = () => {
                                             <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-dark)' }}>Password</label>
                                             <input type="password" name="password" value={formData.password} onChange={handleChange} placeholder="Enter your password" style={{ width: '100%', padding: '12px 16px', border: '1px solid var(--border-color)', borderRadius: '6px' }} required />
                                         </div>
-                                        <a href="javascript:void(0)" className="forgot-password" style={{ display: 'block', textAlign: 'right', fontSize: '0.8rem', color: 'var(--primary)', marginBottom: '1.5rem' }}>Forgot password?</a>
+                                        <button type="button" onClick={() => console.log('Forgot password clicked')} className="forgot-password" style={{ display: 'block', marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', outline: 'none', fontSize: '0.8rem', color: 'var(--primary)', marginBottom: '1.5rem', padding: 0 }}>Forgot password?</button>
                                         <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>Sign In</button>
                                     </form>
                                 )}

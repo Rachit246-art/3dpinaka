@@ -14,6 +14,7 @@ import BrandPage from './pages/BrandPage';
 import About from './pages/About';
 import Testimonials from './pages/Testimonials';
 import PrintingServices from './pages/PrintingServices';
+import ProductDetail from './pages/ProductDetail';
 import AdminDashboard from './pages/AdminDashboard';
 import { cartService, CART_UPDATED, WISHLIST_UPDATED, SHOW_TOAST } from './services/cartService';
 import './index.css';
@@ -154,6 +155,7 @@ function App() {
           <Route path="/login.html" element={<Login />} />
           <Route path="/wishlist" element={<Wishlist />} />
           <Route path="/wishlist.html" element={<Wishlist />} />
+          <Route path="/product/:id" element={<ProductDetail />} />
           
           {/* Brand Routes */}
           <Route path="/brand/:brandName" element={<BrandPage />} />

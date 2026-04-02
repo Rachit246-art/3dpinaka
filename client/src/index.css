@@ -17,6 +17,29 @@
   --gradient: linear-gradient(135deg, #00e5ff 0%, #a855f7 100%);
 }
 
+/* Stock Badge Styles */
+.image-wrapper {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.stock-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: #ff4d4f;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  z-index: 5;
+  box-shadow: 0 4px 10px rgba(255, 77, 79, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -314,10 +337,26 @@ header {
 
 .marquee {
   display: flex;
-  gap: 2rem;
+  width: max-content;
   color: var(--text-dark);
-  font-weight: 600;
-  animation: scroll 15s linear infinite;
+  font-weight: 700;
+  animation: scroll 20s linear infinite;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.marquee-content {
+  display: flex;
+  align-items: center;
+  gap: 3rem;
+  padding-right: 3rem;
+}
+
+.marquee span {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
 }
 
 @keyframes scroll {
@@ -2430,3 +2469,101 @@ footer {
         grid-template-columns: 1fr !important;
     }
 }
+
+/* Loading Spinner */
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(0, 229, 255, 0.1);
+  border-left-color: var(--primary);
+  border-radius: 50%;
+  animation: spinner 1s linear infinite;
+}
+
+@keyframes spinner {
+  to { transform: rotate(360deg); }
+}
+
+/* Sold Out Overlay for Cards */
+.sold-out-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    backdrop-filter: blur(2px);
+}
+
+.sold-out-circle {
+    background: white;
+    color: var(--dark-bg);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* Active Tag Pills */
+.active-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 24px;
+    align-items: center;
+}
+
+.tag-pill {
+    background: #f1f5f9;
+    color: #475569;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s;
+}
+
+.tag-pill svg {
+    cursor: pointer;
+    color: #94a3b8;
+}
+
+.tag-pill svg:hover {
+    color: #ef4444;
+}
+
+.tag-clear {
+    background: none;
+    border: none;
+    color: var(--primary);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    transition: opacity 0.2s;
+}
+
+.tag-clear:hover {
+    opacity: 0.8;
+}
+
+.out-of-stock-label {
+    background: #fee2e2;
+    color: #ef4444;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: auto;
+}
+

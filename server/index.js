@@ -28,6 +28,13 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Routes
+app.use((req, res, next) => {
+    if (req.path.startsWith('/api')) {
+        console.log(`API Request: ${req.method} ${req.path}`);
+    }
+    next();
+});
+
 app.use('/api/products', productRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/support', supportRoutes);
@@ -38,6 +45,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/images', express.static(path.join(__dirname, '../client/public/images')));
 
 // Serve static files from the React frontend app
 app.use(express.static(path.join(__dirname, '../client/dist')));
@@ -45,6 +53,16 @@ app.use(express.static(path.join(__dirname, '../client/dist')));
 // Handle client routing, return all requests to React app
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+});
+
+// Global Error Handler to avoid returning HTML for 500 errors
+app.use((err, req, res, next) => {
+  console.error("Express Error Detail:", err);
+  res.status(err.status || 500).json({ 
+    success: false,
+    message: err.message || "Internal Server Error - Check Backend Logs",
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
+  });
 });
 
 // MongoDB Connection

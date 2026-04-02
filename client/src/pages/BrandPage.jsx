@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { Link, useParams, useLocation } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, WhatsappLogo, Heart, ShoppingCart, FunnelSimple, CaretDown, X } from '@phosphor-icons/react';
 import { BRANDS } from '../constants/data';
 import { cartService } from '../services/cartService';
+import { getImageUrl } from '../utils/imageUtils';
 
 const BrandProductCard = ({ product, revealRef }) => {
     const [isInWishlist, setIsInWishlist] = useState(cartService.isInWishlist(product.name || product.title));
@@ -21,12 +22,14 @@ const BrandProductCard = ({ product, revealRef }) => {
                 {product.badge && <span className="mini-badge">{product.badge}</span>}
             </div>
             <div className="image-wrapper">
-                <img 
-                    src={product.image?.startsWith('/uploads') ? `http://localhost:5000${product.image}` : (product.image || 'https://via.placeholder.com/300x300?text=No+Image')} 
-                    alt={product.name || product.title} 
-                    className="product-img" 
-                    onError={(e) => { e.target.src = 'https://via.placeholder.com/300x300?text=Image+Not+Found'; }}
-                />
+                <Link to={`/product/${product._id}`} style={{ display: 'block', height: '100%' }}>
+                    <img
+                        src={getImageUrl(product.image)}
+                        alt={product.name || product.title} 
+                        className="product-img" 
+                        onError={(e) => { e.target.onerror = null; e.target.src = '/fallback.png'; }}
+                    />
+                </Link>
                 {!product.inStock && (
                     <div className="sold-out-overlay">
                         <div className="sold-out-circle">Sold Out</div>
@@ -35,31 +38,23 @@ const BrandProductCard = ({ product, revealRef }) => {
             </div>
             <div className="content">
                 <div className="product-cat">{product.category} {product.brand && `| ${product.brand}`}</div>
-                <h3 className="title">{product.name || product.title}</h3>
+                <Link to={`/product/${product._id}`} className="title" style={{ textDecoration: 'none', color: 'inherit' }}>
+                    {product.name || product.title}
+                </Link>
                 <div className="reviews">
                     <span className="stars">
                         {typeof product.rating === 'number' ? 
                             ('★'.repeat(Math.floor(product.rating)) + '☆'.repeat(5 - Math.floor(product.rating))) : 
-                            (product.stars?.split(' ')[0] || '★★★★★')
+                            ('★★★★★')
                         }
                     </span>
                     <span className="review-count">
                         {typeof product.rating === 'number' ? 
                             `(${product.rating.toFixed(1)})` : 
-                            (product.stars?.split(' ')[1] || '(5.0)')
+                            '(5.0)'
                         }
                     </span>
                 </div>
-                {product.specs && product.specs.length > 0 && (
-                    <div className="spec-grid">
-                        {product.specs.slice(0, 4).map((spec, i) => (
-                            <div key={i} className="spec-item">
-                                <span className="spec-label">{spec.label}</span>
-                                <span className="spec-value">{spec.value}</span>
-                            </div>
-                        ))}
-                    </div>
-                )}
                 <div className="footer">
                     <div className="price-section">
                         <span className="current-price">₹{parsePrice(product.price).toLocaleString('en-IN')}</span>
@@ -80,7 +75,11 @@ const BrandProductCard = ({ product, revealRef }) => {
                                 <Heart size={22} weight={isInWishlist ? "fill" : "bold"} />
                             </button>
                         </>
-                    ) : null}
+                    ) : (
+                        <button className="add-cart-btn sold-out-btn" disabled style={{ background: '#94a3b8', cursor: 'not-allowed' }}>
+                             <ShoppingCart size={22} weight="bold" />
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
@@ -99,34 +98,56 @@ const parsePrice = (p) => typeof p === 'number' ? p : (parseInt(String(p).replac
 
 const BrandPage = () => {
     const { brandName } = useParams();
-    const location = useLocation();
+    const [searchParams, setSearchParams] = useSearchParams();
     const revealRefs = useRef([]);
     const [showFilter, setShowFilter] = useState(true);
     const [sortBy, setSortBy] = useState('best');
     const [sortOpen, setSortOpen] = useState(false);
-    const ALL_CATS = useMemo(() => ['3D Printer', 'Filament', 'Resin', 'Accessory', 'Spare Parts', '3D Pen', '3D Scanner', 'Laser Engraver', 'CNC Router', 'Food Printer', 'Robotics', 'Safety'], []);
-    const [availabilityFilter, setAvailabilityFilter] = useState([]);
-    const [selectedCats, setSelectedCats] = useState(ALL_CATS.map(c => c.toLowerCase()));
-    const [minPrice, setMinPrice] = useState(0);
-    const [maxPriceVal, setMaxPriceVal] = useState(1000000);
+    
     const [dbProducts, setDbProducts] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    const effectiveBrandName = brandName || location.pathname.split('/').pop().replace('.html', '');
-    const brand = BRANDS.find(b => b.path === effectiveBrandName) || { name: effectiveBrandName.charAt(0).toUpperCase() + effectiveBrandName.slice(1) };
-    
+    const [filters, setFilters] = useState({
+        brand: [],
+        category: [],
+        availability: []
+    });
+
+    const effectiveBrandName = useMemo(() => {
+        if (brandName) return brandName;
+        return window.location.pathname.split('/').pop().replace('.html', '');
+    }, [brandName]);
+
+    const brand = useMemo(() => {
+        return BRANDS.find(b => b.path === effectiveBrandName) || { name: effectiveBrandName.charAt(0).toUpperCase() + effectiveBrandName.slice(1) };
+    }, [effectiveBrandName]);
+
+    const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
     useEffect(() => {
         const fetchBrandProducts = async () => {
             setLoading(true);
             try {
-                let queryStr = `brand=${brand.name.toLowerCase()}&`;
-                // If exactly 1 filter is selected, send it. If 0 or 2, send nothing (show all)
-                if (availabilityFilter.length === 1) {
-                    queryStr += `availability=${availabilityFilter[0]}&`;
+                const query = new URLSearchParams();
+                query.append('brand', brand.name.toLowerCase());
+                
+                if (filters.category.length > 0) {
+                    query.append("category", filters.category.join(","));
                 }
-                const res = await fetch(`http://localhost:5000/api/products?${queryStr.replace(/&$/, '')}`);
+                
+                if (filters.availability.length === 1) {
+                    const value = filters.availability[0] === "In Stock" ? "in" : "out";
+                    query.append("availability", value);
+                }
+
+                const url = `${BASE_URL}/api/products?${query.toString()}`;
+                console.log("API URL (Brand):", url);
+
+                const res = await fetch(url);
                 if (res.ok) {
-                    setDbProducts(await res.json());
+                    const data = await res.json();
+                    console.log("Brand Products Count:", data.length);
+                    setDbProducts(data);
                 }
             } catch (err) {
                 console.error("Brand fetch error:", err);
@@ -135,54 +156,19 @@ const BrandPage = () => {
             }
         };
         fetchBrandProducts();
-    }, [brand.name, availabilityFilter]);
-
-    const realMaxPrice = useMemo(() => Math.max(...dbProducts.map(p => parsePrice(p.price)), 100000), [dbProducts]);
-    const realMinPrice = useMemo(() => Math.min(...dbProducts.map(p => parsePrice(p.price)), 0), [dbProducts]);
-
-    useEffect(() => {
-        if (dbProducts.length > 0) {
-            setMinPrice(realMinPrice);
-            setMaxPriceVal(realMaxPrice);
-        }
-    }, [dbProducts, realMaxPrice, realMinPrice]);
+    }, [brand.name, filters]);
 
     const products = useMemo(() => {
-        // Find static products for this brand
-        let staticBrandProducts = [];
-        const bLabel = brand.name.toLowerCase();
-        // (Removing static products for brevity if they are not in use, but normally we'd keep them if they exist)
-        
-        let filtered = [...dbProducts];
-
-        // Availability filtering is handled by the backend API.
-        // Frontend handles categories/price/sort.
-
-        if (selectedCats.length < ALL_CATS.length) {
-            filtered = filtered.filter(p => {
-                const pCat = (p.category || '').toLowerCase();
-                return selectedCats.some(cat => {
-                    const c = cat.toLowerCase();
-                    if (c === '3d printer') return ['fdm', 'resin', 'industrial', 'dental', 'fdm printer', 'resin printer', 'industrial-max'].some(t => pCat.includes(t));
-                    return pCat.includes(c.replace(/s$/, '')) || c.includes(pCat.replace(/s$/, ''));
-                });
-            });
-        }
-
-        filtered = filtered.filter(p => {
-            const pr = parsePrice(p.price);
-            return pr >= minPrice && pr <= maxPriceVal;
-        });
-
+        let items = [...dbProducts];
         switch (sortBy) {
-            case 'az': filtered.sort((a, b) => (a.name || a.title).localeCompare(b.name || b.title)); break;
-            case 'za': filtered.sort((a, b) => (b.name || b.title).localeCompare(a.name || a.title)); break;
-            case 'price_asc': filtered.sort((a, b) => parsePrice(a.price) - parsePrice(b.price)); break;
-            case 'price_desc': filtered.sort((a, b) => parsePrice(b.price) - parsePrice(a.price)); break;
+            case 'az': items.sort((a, b) => (a.name || a.title).localeCompare(b.name || b.title)); break;
+            case 'za': items.sort((a, b) => (b.name || b.title).localeCompare(a.name || a.title)); break;
+            case 'price_asc': items.sort((a, b) => (a.price || 0) - (b.price || 0)); break;
+            case 'price_desc': items.sort((a, b) => (b.price || 0) - (a.price || 0)); break;
             default: break;
         }
-        return filtered;
-    }, [dbProducts, minPrice, maxPriceVal, sortBy, availabilityFilter, selectedCats, ALL_CATS]);
+        return items;
+    }, [dbProducts, sortBy]);
 
     useEffect(() => {
         const observer = new IntersectionObserver((entries) => {
@@ -196,13 +182,13 @@ const BrandPage = () => {
                     observer.observe(el);
                 }
             });
-        }, 50);
+        }, 100);
 
         return () => {
             clearTimeout(timer);
             observer.disconnect();
         };
-    }, [products, availabilityFilter]);
+    }, [products, loading]);
 
     const addToRevealRefs = (el) => {
         if (el && !revealRefs.current.includes(el)) {
@@ -210,159 +196,127 @@ const BrandPage = () => {
         }
     };
 
-    revealRefs.current = [];
-
-    const toggleAvailability = (val) => setAvailabilityFilter(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
-    const toggleCat = (cat) => {
-        const cLow = cat.toLowerCase();
-        setSelectedCats(prev => prev.includes(cLow) ? prev.filter(c => c !== cLow) : [...prev, cLow]);
+    const toggleAvailability = (val) => {
+        setFilters(prev => ({
+            ...prev,
+            availability: prev.availability.includes(val) ? prev.availability.filter(v => v !== val) : [...prev.availability, val]
+        }));
     };
-    const removeTag = (tag) => { 
-        if (tag.type === 'availability') toggleAvailability(tag.value); 
+
+    const toggleCat = (cat) => {
+        const c = cat.toLowerCase();
+        setFilters(prev => ({
+            ...prev,
+            category: prev.category.includes(c) ? prev.category.filter(x => x !== c) : [...prev.category, c]
+        }));
+    };
+
+    const clearAll = () => setFilters({ brand: [], category: [], availability: [] });
+
+    const activeTags = useMemo(() => {
+        const tags = [];
+        filters.availability.forEach(a => tags.push({ type: 'availability', label: a }));
+        filters.category.forEach(c => tags.push({ type: 'category', label: c.charAt(0).toUpperCase() + c.slice(1), value: c }));
+        return tags;
+    }, [filters]);
+
+    const removeTag = (tag) => {
+        if (tag.type === 'availability') toggleAvailability(tag.label);
         if (tag.type === 'category') toggleCat(tag.value);
     };
-    const clearAll = () => { 
-        setAvailabilityFilter([]); 
-        setSelectedCats(ALL_CATS.map(c => c.toLowerCase()));
-        setMinPrice(realMinPrice); 
-        setMaxPriceVal(realMaxPrice); 
-    };
 
-    const activeTags = [
-        ...(availabilityFilter.length === 1 ? availabilityFilter.map(a => ({
-            type: 'availability', value: a,
-            label: `Availability: ${a === 'inStock' ? 'In stock' : 'Out of stock'}`
-        })) : []),
-        ...(selectedCats.length < ALL_CATS.length ? selectedCats.map(c => ({
-            type: 'category', value: c,
-            label: `Category: ${c}`
-        })) : [])
-    ];
-
-    const showOutOfStockMsg = availabilityFilter.length === 1 && availabilityFilter.includes('out') && !products.some(p => !p.inStock);
-    const SortOptionLabel = SORT_OPTIONS.find(opt => opt.value === sortBy)?.label || 'Best selling';
+    const ALL_CATS = ['3D Printer', 'Filament', 'Resin', 'Accessory', 'Spare Parts', '3D Pen', '3D Scanner', 'Laser Engraver', 'CNC Router', 'Food Printer', 'Robotics', 'Safety'];
 
     return (
         <main>
             <div style={{ background: 'var(--dark-bg)', padding: '4rem 0', textAlign: 'center', color: 'white' }}>
                 <Link to="/" className="back-home-btn"><ArrowLeft /> Back to Home</Link>
                 <h1>{brand.name} Printers</h1>
-                <p style={{ color: '#94a3b8', marginTop: '1rem' }}>Explore the latest collection from {brand.name}</p>
+                <p style={{ color: '#94a3b8', marginTop: '1rem' }}>Professional 3D Printing solutions by {brand.name}</p>
             </div>
 
-            {dbProducts.length > 0 ? (
-                <section className="section container">
-                    <div className="filter-topbar">
-                        <button className="filter-toggle-btn" onClick={() => setShowFilter(!showFilter)}>
-                            <FunnelSimple size={18} weight="bold" />
-                            {showFilter ? 'Hide filter' : 'Show filter'}
-                        </button>
-                        <div className="sort-wrapper">
-                            <span className="sort-label">Sort by:</span>
-                            <div className="sort-dropdown" onClick={() => setSortOpen(!sortOpen)}>
-                                <span>{SortOptionLabel}</span>
-                                <CaretDown size={16} />
-                                {sortOpen && (
-                                    <div className="sort-menu">
-                                        {SORT_OPTIONS.map(opt => (
-                                            <div key={opt.value} className={`sort-option ${sortBy === opt.value ? 'active' : ''}`}
-                                                onClick={(e) => { e.stopPropagation(); setSortBy(opt.value); setSortOpen(false); }}>
-                                                {opt.label}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {activeTags.length > 0 && (
-                        <div className="active-tags">
-                            {activeTags.map((tag, i) => (
-                                <span key={i} className="tag-pill">{tag.label} <X size={14} weight="bold" onClick={() => removeTag(tag)} /></span>
-                            ))}
-                            <button className="tag-clear" onClick={clearAll}>Remove all</button>
-                        </div>
-                    )}
-
-                    <div className="filter-layout">
-                        {showFilter && (
-                            <aside className="filter-sidebar">
-                                <div className="filter-section">
-                                    <div className="filter-section-header"><h4>Availability</h4></div>
-                                    <label className="filter-checkbox">
-                                        <input type="checkbox" checked={availabilityFilter.includes('inStock')} onChange={() => setAvailabilityFilter(prev => prev.includes('inStock') ? prev.filter(v => v !== 'inStock') : [...prev, 'inStock'])} />
-                                        <span>In Stock</span>
-                                    </label>
-                                    <label className="filter-checkbox">
-                                        <input type="checkbox" checked={availabilityFilter.includes('outOfStock')} onChange={() => setAvailabilityFilter(prev => prev.includes('outOfStock') ? prev.filter(v => v !== 'outOfStock') : [...prev, 'outOfStock'])} />
-                                        <span>Out Of Stock</span>
-                                    </label>
-                                </div>
-                                <div className="filter-section">
-                                    <div className="filter-section-header"><h4>Category</h4></div>
-                                    <div className="filter-scroll-area">
-                                        <label className="filter-checkbox all-option">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={selectedCats.length === ALL_CATS.length} 
-                                                onChange={() => setSelectedCats(ALL_CATS.map(c => c.toLowerCase()))} 
-                                            />
-                                            <span style={{ fontWeight: 600 }}>All</span>
-                                        </label>
-                                        {ALL_CATS.map(cat => (
-                                            <label key={cat} className="filter-checkbox">
-                                                <input type="checkbox" checked={selectedCats.includes(cat.toLowerCase())} onChange={() => toggleCat(cat)} />
-                                                <span>{cat}</span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="filter-section">
-                                    <div className="filter-section-header"><h4>Price</h4></div>
-                                    <div className="dual-range-container">
-                                        <div className="range-marks">
-                                            <span>₹{realMinPrice.toLocaleString()}</span>
-                                            <span>₹{realMaxPrice.toLocaleString()}</span>
+            <section className="section container">
+                <div className="filter-topbar">
+                    <button className="filter-toggle-btn" onClick={() => setShowFilter(!showFilter)}>
+                        <FunnelSimple size={18} weight="bold" />
+                        {showFilter ? 'Hide filter' : 'Show filter'}
+                    </button>
+                    <div className="sort-wrapper">
+                        <span className="sort-label">Sort by:</span>
+                        <div className="sort-dropdown" onClick={() => setSortOpen(!sortOpen)}>
+                            <span>{SORT_OPTIONS.find(opt => opt.value === sortBy)?.label}</span>
+                            <CaretDown size={16} />
+                            {sortOpen && (
+                                <div className="sort-menu">
+                                    {SORT_OPTIONS.map(opt => (
+                                        <div key={opt.value} className={`sort-option ${sortBy === opt.value ? 'active' : ''}`}
+                                            onClick={(e) => { e.stopPropagation(); setSortBy(opt.value); setSortOpen(false); }}>
+                                            {opt.label}
                                         </div>
-                                        <div className="dual-range-track">
-                                            <div className="dual-range-fill" style={{
-                                                left: `${((minPrice - realMinPrice) / (realMaxPrice - realMinPrice)) * 100}%`,
-                                                right: `${100 - ((maxPriceVal - realMinPrice) / (realMaxPrice - realMinPrice)) * 100}%`
-                                            }}></div>
-                                        </div>
-                                        <input type="range" className="dual-range-input" min={realMinPrice} max={realMaxPrice} value={minPrice} onChange={(e) => setMinPrice(Math.min(parseInt(e.target.value), maxPriceVal))} />
-                                        <input type="range" className="dual-range-input" min={realMinPrice} max={realMaxPrice} value={maxPriceVal} onChange={(e) => setMaxPriceVal(Math.max(parseInt(e.target.value), minPrice))} />
-                                    </div>
-                                    <p className="price-range-label">Price: ₹{minPrice.toLocaleString('en-IN')} - ₹{maxPriceVal.toLocaleString('en-IN')}</p>
-                                </div>
-                            </aside>
-                        )}
-
-                        <div className={`brand-product-grid ${showFilter ? '' : 'full-width'}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '2rem', flex: 1 }}>
-                            {products.length > 0 ? products.map((product) => (
-                                <BrandProductCard key={product._id || product.id} product={product} revealRef={addToRevealRefs} />
-                            )) : (
-                                <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
-                                    <p>No products match your filters.</p>
-                                    <button className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={clearAll}>Clear Filters</button>
+                                    ))}
                                 </div>
                             )}
                         </div>
                     </div>
-                </section>
-            ) : (
-                <section className="section container">
-                    <div className="products-grid">
-                        <div className="reveal" style={{ gridColumn: '1 / -1', padding: '4rem', textAlign: 'center', background: 'var(--light-bg)', borderRadius: '12px' }} ref={addToRevealRefs}>
-                            <h2 style={{ fontSize: '2rem', color: 'var(--text-dark)', marginBottom: '1rem' }}>{brand.name} Collection</h2>
-                            <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>
-                                Loading products for {brand.name}...
-                            </p>
-                        </div>
+                </div>
+
+                {activeTags.length > 0 && (
+                    <div className="active-tags">
+                        {activeTags.map((tag, i) => (
+                            <span key={i} className="tag-pill">{tag.label} <X size={14} weight="bold" onClick={() => removeTag(tag)} /></span>
+                        ))}
+                        <button className="tag-clear" onClick={clearAll}>Remove all</button>
                     </div>
-                </section>
-            )}
+                )}
+
+                <div className="filter-layout">
+                    {showFilter && (
+                        <aside className="filter-sidebar">
+                            <div className="filter-section">
+                                <div className="filter-section-header"><h4>Availability</h4></div>
+                                <label className="filter-checkbox">
+                                    <input type="checkbox" checked={filters.availability.includes('In Stock')} onChange={() => toggleAvailability('In Stock')} />
+                                    <span>In Stock</span>
+                                </label>
+                                <label className="filter-checkbox">
+                                    <input type="checkbox" checked={filters.availability.includes('Out of Stock')} onChange={() => toggleAvailability('Out of Stock')} />
+                                    <span>Out Of Stock</span>
+                                </label>
+                            </div>
+                            <div className="filter-section">
+                                <div className="filter-section-header"><h4>Category</h4></div>
+                                <div className="filter-scroll-area">
+                                    {ALL_CATS.map(cat => (
+                                        <label key={cat} className="filter-checkbox">
+                                            <input type="checkbox" checked={filters.category.includes(cat.toLowerCase())} onChange={() => toggleCat(cat)} />
+                                            <span>{cat}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        </aside>
+                    )}
+
+                    <div className={`brand-product-grid ${showFilter ? '' : 'full-width'}`} style={{ flex: 1 }}>
+                        {console.log("Rendering Brand Products:", products?.length)}
+                        {loading ? (
+                            <div style={{ gridColumn: '1/-1', display: 'flex', justifyContent: 'center', padding: '5rem' }}>
+                                <div className="loading-spinner"></div>
+                            </div>
+                        ) : products && products.length > 0 ? (
+                            products.map((product) => (
+                                <BrandProductCard key={product._id || product.id} product={product} revealRef={addToRevealRefs} />
+                            ))
+                        ) : (
+                            <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '8rem 2rem', background: '#f8fafc', borderRadius: '12px' }}>
+                                <h3 style={{ marginBottom: '1rem' }}>No Products Found</h3>
+                                <p style={{ color: '#64748b' }}>We couldn't find any products matching your selected filters for this brand.</p>
+                                <button className="btn btn-primary" style={{ marginTop: '2rem' }} onClick={clearAll}>Clear All Filters</button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </section>
             <a href="https://wa.me/918299475268" className="whatsapp-float" target="_blank" rel="noreferrer"><WhatsappLogo size={32} /></a>
         </main>
     );

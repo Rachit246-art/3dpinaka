@@ -4,7 +4,10 @@ import {
   House, Package, ShoppingCart, Users, Gear, 
   Bell, MagnifyingGlass, List, CurrencyDollar, TrendUp, Clock, ArrowLeft, Heart, X, UploadSimple, Trash, PencilSimple
 } from '@phosphor-icons/react';
+import { getImageUrl } from '../utils/imageUtils';
 import './AdminDashboard.css';
+
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const parsePriceLocal = (p) => {
     if (typeof p === 'number') return p;
@@ -45,7 +48,8 @@ const AdminDashboard = () => {
   const [newProduct, setNewProduct] = useState({
       name: '', category: 'FDM', price: '', mrp: '', 
       inStock: true, image: '', rating: 5.0, tags: 'None', badgeStyle: null, description: '',
-      brand: 'Anycubic', otherCategory: '', condition: 'New'
+      brand: 'Anycubic', otherCategory: '', condition: 'New',
+      specifications: [{ key: '', value: '' }]
   });
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -53,6 +57,7 @@ const AdminDashboard = () => {
   const [editImagePreview, setEditImagePreview] = useState(null);
   const [editSelectedFile, setEditSelectedFile] = useState(null);
   const [deleteConfirmState, setDeleteConfirmState] = useState(null);
+  const [productSearchQuery, setProductSearchQuery] = useState('');
 
   // --- Orders State ---
   const [orders, setOrders] = useState([]);
@@ -65,9 +70,17 @@ const AdminDashboard = () => {
   const [isAdminEditMode, setIsAdminEditMode] = useState(false);
   const [adminEditForm, setAdminEditForm] = useState({ name: '', phone: '' });
 
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const showToast = (message, type = 'success') => {
+      setToast({ show: true, message, type });
+      setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
+  };
+
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
     try {
-        const res = await fetch(`http://localhost:5000/api/orders/${orderId}`, {
+        const res = await fetch(`${BASE_URL}/api/orders/${orderId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: newStatus })
@@ -80,7 +93,7 @@ const AdminDashboard = () => {
             
             // Refresh stats to ensure Total Sales, Pending Orders instantly reflect changes without page reload.
             try {
-                const statsRes = await fetch('http://localhost:5000/api/stats');
+                const statsRes = await fetch(`${BASE_URL}/api/stats`);
                 if (statsRes.ok) setStats(await statsRes.json());
             } catch (statsErr) {
                 console.error("Failed to silently refresh DB stats map", statsErr);
@@ -115,7 +128,7 @@ const AdminDashboard = () => {
   const toggleUserStatus = async (userId, currentStatus) => {
     try {
         const newStatus = currentStatus === 'Active' ? 'Blocked' : 'Active';
-        const res = await fetch(`http://localhost:5000/api/users/${userId}`, {
+        const res = await fetch(`${BASE_URL}/api/users/${userId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: newStatus })
@@ -134,7 +147,7 @@ const AdminDashboard = () => {
   const handleViewUserDetails = async (user) => {
     setSelectedUserDetails({ ...user, recentOrders: [] });
     try {
-        const res = await fetch(`http://localhost:5000/api/users/${user.id}`);
+        const res = await fetch(`${BASE_URL}/api/users/${user.id}`);
         if(res.ok) {
             setSelectedUserDetails(await res.json());
         }
@@ -160,9 +173,45 @@ const AdminDashboard = () => {
       }
   };
 
+  const handleAddSpec = (isEdit = false) => {
+    if (isEdit) {
+      setEditProductState({
+        ...editProductState,
+        specifications: [...(editProductState.specifications || []), { key: '', value: '' }]
+      });
+    } else {
+      setNewProduct({
+        ...newProduct,
+        specifications: [...newProduct.specifications, { key: '', value: '' }]
+      });
+    }
+  };
+
+  const handleUpdateSpec = (index, field, value, isEdit = false) => {
+    if (isEdit) {
+      const newSpecs = [...(editProductState.specifications || [])];
+      newSpecs[index][field] = value;
+      setEditProductState({ ...editProductState, specifications: newSpecs });
+    } else {
+      const newSpecs = [...newProduct.specifications];
+      newSpecs[index][field] = value;
+      setNewProduct({ ...newProduct, specifications: newSpecs });
+    }
+  };
+
+  const handleRemoveSpec = (index, isEdit = false) => {
+    if (isEdit) {
+      const newSpecs = editProductState.specifications.filter((_, i) => i !== index);
+      setEditProductState({ ...editProductState, specifications: newSpecs });
+    } else {
+      const newSpecs = newProduct.specifications.filter((_, i) => i !== index);
+      setNewProduct({ ...newProduct, specifications: newSpecs });
+    }
+  };
+
   const handleSaveAdminProfile = async () => {
     try {
-        const res = await fetch('http://localhost:5000/api/admin', {
+        const res = await fetch(`${BASE_URL}/api/admin`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(adminEditForm)
@@ -182,25 +231,25 @@ const AdminDashboard = () => {
   useEffect(() => {
     const fetchDashData = async () => {
       try {
-        const statsRes = await fetch('http://localhost:5000/api/stats');
+        const statsRes = await fetch(`${BASE_URL}/api/stats`);
         if (statsRes.ok) setStats(await statsRes.json());
         
-        const prodsRes = await fetch('http://localhost:5000/api/products');
+        const prodsRes = await fetch(`${BASE_URL}/api/products`);
         if (prodsRes.ok) setAdminProducts(await prodsRes.json());
 
-        const ordersRes = await fetch('http://localhost:5000/api/orders');
+        const ordersRes = await fetch(`${BASE_URL}/api/orders`);
         if (ordersRes.ok) {
             const ordersData = await ordersRes.json();
             console.log("Fetched orders:", ordersData);
             setOrders(ordersData);
         }
 
-        const usersRes = await fetch('http://localhost:5000/api/users');
+        const usersRes = await fetch(`${BASE_URL}/api/users`);
         if (usersRes.ok) {
             setUsers(await usersRes.json());
         }
 
-        const adminRes = await fetch('http://localhost:5000/api/admin');
+        const adminRes = await fetch(`${BASE_URL}/api/admin`);
         if (adminRes.ok) {
             setAdminProfile(await adminRes.json());
         }
@@ -259,9 +308,9 @@ const AdminDashboard = () => {
             <button className="menu-toggle mobile-only-toggle" onClick={toggleSidebar}>
               <List size={28} />
             </button>
-            <div className="search-bar">
+            <div className="search-bar" style={{ opacity: 0, pointerEvents: 'none' }}>
               <MagnifyingGlass size={20} className="search-icon" />
-              <input type="text" placeholder="Search..." />
+              <input type="text" placeholder="Search..." disabled />
             </div>
           </div>
           <div className="header-right">
@@ -422,13 +471,26 @@ const AdminDashboard = () => {
 
         {activeTab === 'Products' && (
           <div className="dashboard-content" style={{ padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontSize: '1.5rem', color: 'var(--admin-text-dark)' }}>Products Management ({adminProducts.length} items)</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: '20px' }}>
+              <h2 style={{ fontSize: '1.5rem', color: 'var(--admin-text-dark)', margin: 0 }}>Products Management ({adminProducts.length} items)</h2>
+              
+              <div className="search-bar" style={{ flex: 1, maxWidth: '400px', display: 'flex', alignItems: 'center', background: 'white', border: '1px solid var(--admin-border-color)', borderRadius: '8px', padding: '0 12px', height: '45px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                <MagnifyingGlass size={20} style={{ color: 'var(--admin-text-muted)', marginRight: '10px' }} />
+                <input 
+                  type="text" 
+                  placeholder="Search by name, brand, or category..." 
+                  value={productSearchQuery}
+                  onChange={(e) => setProductSearchQuery(e.target.value)}
+                  style={{ border: 'none', outline: 'none', width: '100%', fontSize: '0.95rem', background: 'transparent' }} 
+                />
+                {productSearchQuery && <X size={18} style={{ color: 'var(--admin-text-muted)', cursor: 'pointer' }} onClick={() => setProductSearchQuery('')} />}
+              </div>
+
               <button 
                 onClick={() => setIsAddModalOpen(true)}
-                style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)', transition: 'background 0.3s' }}
-                onMouseOver={e => e.currentTarget.style.background = '#2563eb'}
-                onMouseOut={e => e.currentTarget.style.background = '#3b82f6'}
+                style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)', transition: 'all 0.2s', whiteSpace: 'nowrap', height: '45px' }}
+                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
               >
                 + Add New Product
               </button>
@@ -437,7 +499,11 @@ const AdminDashboard = () => {
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--admin-text-muted)' }}>Loading products...</div>
             ) : (
                 <div className="products-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1.5rem' }}>
-                    {adminProducts.map(product => (
+                    {adminProducts.filter(p => 
+                        (p.name || p.title || "").toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+                        (p.brand || "").toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+                        (p.category || "").toLowerCase().includes(productSearchQuery.toLowerCase())
+                    ).map(product => (
                         <div key={product._id || Math.random()} className={`product-card ${!product.inStock ? 'sold-out' : ''}`}>
                             <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '8px', zIndex: 10 }}>
                                 <button 
@@ -446,7 +512,7 @@ const AdminDashboard = () => {
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         setEditProductState(product);
-                                        setEditImagePreview(product.image?.startsWith('/uploads') ? `http://localhost:5000${product.image}` : product.image);
+                                        setEditImagePreview(product.image?.startsWith('/uploads') ? `${BASE_URL}${product.image}` : product.image);
                                         setEditSelectedFile(null);
                                         setIsEditModalOpen(true);
                                     }}
@@ -470,19 +536,13 @@ const AdminDashboard = () => {
                                     <Trash size={18} weight="fill" />
                                 </button>
                             </div>
-                            {product.badge && <div className="badge" style={{ ...product.badgeStyle, top: '10px', left: '10px', position: 'absolute' }}>{product.badge}</div>}
                             <div className="product-img-wrapper" style={{ position: 'relative' }}>
                                 <img 
-                                    src={product.image?.startsWith('/uploads') ? `http://localhost:5000${product.image}` : (product.image || 'https://via.placeholder.com/300x300?text=No+Image')} 
+                                    src={getImageUrl(product.image)} 
                                     alt={product.name || product.title} 
                                     className="product-img" 
-                                    onError={(e) => { e.target.src = 'https://via.placeholder.com/300x300?text=Image+Not+Found'; }}
+                                    onError={(e) => { e.target.src = '/fallback.png'; }}
                                 />
-                                {!product.inStock && (
-                                    <div className="sold-out-overlay">
-                                        <div className="sold-out-circle">Sold Out</div>
-                                    </div>
-                                )}
                             </div>
                             <div className="product-info">
                                 <div className="product-cat">{(product.category || 'Category')} {product.brand && `| ${product.brand}`}</div>
@@ -513,7 +573,7 @@ const AdminDashboard = () => {
                                           // Optimistic update
                                           setAdminProducts(prev => prev.map(p => p._id === product._id ? { ...p, inStock: newStatus } : p));
                                           try {
-                                              await fetch(`http://localhost:5000/api/products/${product._id}`, {
+                                              await fetch(`${BASE_URL}/api/products/${product._id}`, {
                                                   method: 'PUT',
                                                   headers: { 'Content-Type': 'application/json' },
                                                   body: JSON.stringify({ inStock: newStatus })
@@ -935,6 +995,32 @@ const AdminDashboard = () => {
                 </div>
 
                 <div>
+                   <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>Product Description</label>
+                   <textarea 
+                     value={newProduct.description} 
+                     onChange={e => setNewProduct({...newProduct, description: e.target.value})} 
+                     style={{ width: '100%', padding: '0.8rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none', minHeight: '100px', fontFamily: 'inherit' }} 
+                     placeholder="Detailed description of the product..." 
+                   />
+                </div>
+
+                <div>
+                   <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', fontWeight: 600, color: '#334155' }}>
+                      Specifications
+                      <button type="button" onClick={() => handleAddSpec(false)} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 8px', fontSize: '12px', cursor: 'pointer' }}>+ Add More</button>
+                   </label>
+                   <div style={{ display: 'grid', gap: '8px' }}>
+                      {newProduct.specifications.map((spec, idx) => (
+                        <div key={idx} style={{ display: 'flex', gap: '8px' }}>
+                          <input type="text" placeholder="Key (e.g. Speed)" value={spec.key} onChange={e => handleUpdateSpec(idx, 'key', e.target.value, false)} style={{ flex: 1, padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                          <input type="text" placeholder="Value (e.g. 500mm/s)" value={spec.value} onChange={e => handleUpdateSpec(idx, 'value', e.target.value, false)} style={{ flex: 1, padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                          <button type="button" onClick={() => handleRemoveSpec(idx, false)} style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fee2e2', borderRadius: '4px', padding: '0 8px', cursor: 'pointer' }}>×</button>
+                        </div>
+                      ))}
+                   </div>
+                </div>
+
+                <div>
                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155' }}>Product Image</label>
                    <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed #cbd5e1', borderRadius: '8px', padding: '2rem', cursor: 'pointer', background: '#f8fafc', transition: 'all 0.2s' }}>
                        {imagePreview ? (
@@ -957,8 +1043,14 @@ const AdminDashboard = () => {
                         Cancel
                     </button>
                     <button 
+                        disabled={isSubmitting}
                         onClick={async () => {
-                            if (!newProduct.name || !newProduct.price || !selectedFile) return alert('Please provide Name, Price, and Image!');
+                            // Unified Validation Layer
+                            if (!newProduct.name || !newProduct.price || !selectedFile) {
+                                return showToast('Error: Name, Price, and Image are mandatory!', 'error');
+                            }
+                            
+                            setIsSubmitting(true);
                             try {
                                 const formData = new FormData();
                                 formData.append('name', newProduct.name);
@@ -971,33 +1063,57 @@ const AdminDashboard = () => {
                                 formData.append('tags', newProduct.tags);
                                 if (newProduct.badgeStyle) formData.append('badgeStyle', JSON.stringify(newProduct.badgeStyle));
                                 formData.append('condition', newProduct.condition);
+                                formData.append('description', newProduct.description);
+                                formData.append('specifications', JSON.stringify(newProduct.specifications.filter(s => s.key && s.value)));
                                 formData.append('image', selectedFile);
 
-                                const res = await fetch('http://localhost:5000/api/products', {
+                                const res = await fetch(`${BASE_URL}/api/products`, {
                                     method: 'POST',
                                     body: formData
                                 });
+                                
+                                const data = await res.json();
+                                
                                 if(res.ok) {
-                                    const createdProduct = await res.json();
-                                    setAdminProducts([createdProduct, ...adminProducts]);
+                                    setAdminProducts([data, ...adminProducts]);
+                                    setStats(prev => ({ ...prev, totalProducts: prev.totalProducts + 1 })); // Manual Instant Increment
+                                    
+                                    // Silent Background Refresh
+                                    fetch(`${BASE_URL}/api/stats`).then(s => s.json()).then(newData => setStats(newData)).catch(() => {});
+                                    
                                     setIsAddModalOpen(false);
-                                    setNewProduct({ name: '', category: 'FDM', price: '', mrp: '', inStock: true, image: '', rating: 5.0, tags: 'None', badgeStyle: null, description: '', brand: 'Anycubic', otherCategory: '', condition: 'New' });
+                                    setNewProduct({ name: '', category: 'FDM', price: '', mrp: '', inStock: true, image: '', rating: 5.0, tags: 'None', badgeStyle: null, description: '', brand: 'Anycubic', otherCategory: '', condition: 'New', specifications: [{ key: '', value: '' }] });
                                     setImagePreview(null);
                                     setSelectedFile(null);
-                                    alert('Successfully added product!');
+                                    showToast('Success: Product added to catalog!', 'success');
                                 } else {
-                                    const errorData = await res.json();
-                                    alert('Server Error: ' + (errorData.message || 'Could not add product.'));
+                                    showToast(data.message || 'Server Error: Could not add product', 'error');
                                 }
                             } catch(e) { 
-                                console.error('Failed to create product', e); 
-                                alert('Network Error: ' + e.message);
+                                console.error('Create product failed', e); 
+                                showToast('Network Error: Connectivity issue', 'error');
+                            } finally {
+                                setIsSubmitting(false);
                             }
                         }}
-                        style={{ padding: '0.8rem 1.5rem', borderRadius: '6px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }}
-                        onMouseOver={e => e.currentTarget.style.background = '#2563eb'}
-                        onMouseOut={e => e.currentTarget.style.background = '#3b82f6'}>
-                        Add Product
+                        style={{ 
+                            padding: '0.8rem 1.5rem', 
+                            borderRadius: '6px', 
+                            border: 'none', 
+                            background: isSubmitting ? '#94a3b8' : '#3b82f6', 
+                            color: 'white', 
+                            fontWeight: 600, 
+                            cursor: isSubmitting ? 'not-allowed' : 'pointer', 
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                        }}>
+                        {isSubmitting ? (
+                            <>
+                                <Clock size={20} className="spinner" /> Saving...
+                            </>
+                        ) : 'Add Product'}
                     </button>
                 </div>
              </div>
@@ -1101,6 +1217,32 @@ const AdminDashboard = () => {
                 </div>
 
                 <div>
+                   <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: 600, color: '#334155' }}>Product Description</label>
+                   <textarea 
+                     value={editProductState.description || ''} 
+                     onChange={e => setEditProductState({...editProductState, description: e.target.value})} 
+                     style={{ width: '100%', padding: '0.8rem', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none', minHeight: '100px', fontFamily: 'inherit' }} 
+                     placeholder="Detailed description of the product..." 
+                   />
+                </div>
+
+                <div>
+                   <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', fontWeight: 600, color: '#334155' }}>
+                      Specifications
+                      <button type="button" onClick={() => handleAddSpec(true)} style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 8px', fontSize: '12px', cursor: 'pointer' }}>+ Add More</button>
+                   </label>
+                   <div style={{ display: 'grid', gap: '8px' }}>
+                      {(editProductState.specifications || []).map((spec, idx) => (
+                        <div key={idx} style={{ display: 'flex', gap: '8px' }}>
+                          <input type="text" placeholder="Key (e.g. Speed)" value={spec.key} onChange={e => handleUpdateSpec(idx, 'key', e.target.value, true)} style={{ flex: 1, padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                          <input type="text" placeholder="Value (e.g. 500mm/s)" value={spec.value} onChange={e => handleUpdateSpec(idx, 'value', e.target.value, true)} style={{ flex: 1, padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                          <button type="button" onClick={() => handleRemoveSpec(idx, true)} style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fee2e2', borderRadius: '4px', padding: '0 8px', cursor: 'pointer' }}>×</button>
+                        </div>
+                      ))}
+                   </div>
+                </div>
+
+                <div>
                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#334155' }}>Product Image</label>
                    <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed #cbd5e1', borderRadius: '8px', padding: '2rem', cursor: 'pointer', background: '#f8fafc', transition: 'all 0.2s' }}>
                        {editImagePreview ? (
@@ -1124,7 +1266,7 @@ const AdminDashboard = () => {
                     </button>
                     <button 
                         onClick={async () => {
-                            if (!editProductState.name || !editProductState.price) return alert('Please provide Name and Price!');
+                            if (!editProductState.name || !editProductState.price) return showToast('Please provide Name and Price!', 'error');
                             try {
                                 const formData = new FormData();
                                 formData.append('name', editProductState.name);
@@ -1137,9 +1279,11 @@ const AdminDashboard = () => {
                                 formData.append('tags', editProductState.tags || 'None');
                                 if (editProductState.badgeStyle) formData.append('badgeStyle', JSON.stringify(editProductState.badgeStyle));
                                 formData.append('condition', editProductState.condition || 'New');
+                                formData.append('description', editProductState.description || '');
+                                formData.append('specifications', JSON.stringify((editProductState.specifications || []).filter(s => s.key && s.value)));
                                 if (editSelectedFile) formData.append('image', editSelectedFile);
 
-                                const res = await fetch(`http://localhost:5000/api/products/${editProductState._id}`, {
+                                const res = await fetch(`${BASE_URL}/api/products/${editProductState._id}`, {
                                     method: 'PUT',
                                     body: formData
                                 });
@@ -1147,14 +1291,14 @@ const AdminDashboard = () => {
                                     const updatedProduct = await res.json();
                                     setAdminProducts(prev => prev.map(p => p._id === updatedProduct._id ? updatedProduct : p));
                                     setIsEditModalOpen(false);
-                                    alert('Successfully updated product!');
+                                    showToast('Successfully updated product!', 'success');
                                 } else {
                                     const errorData = await res.json();
-                                    alert('Server Error: ' + (errorData.message || 'Could not update product.'));
+                                    showToast('Server Error: ' + (errorData.message || 'Could not update product.'), 'error');
                                 }
                             } catch(e) { 
                                 console.error('Failed to update product', e); 
-                                alert('Network Error: ' + e.message);
+                                showToast('Network Error: ' + e.message, 'error');
                             }
                         }}
                         style={{ padding: '0.8rem 1.5rem', borderRadius: '6px', border: 'none', background: '#10b981', color: 'white', fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }}
@@ -1184,9 +1328,13 @@ const AdminDashboard = () => {
               <button 
                 onClick={async () => {
                   try {
-                      const res = await fetch(`http://localhost:5000/api/products/${deleteConfirmState._id}`, { method: 'DELETE' });
+                      const res = await fetch(`${BASE_URL}/api/products/${deleteConfirmState._id}`, { method: 'DELETE' });
                       if (res.ok || res.status === 404) {
                           setAdminProducts(prev => prev.filter(p => p._id !== deleteConfirmState._id));
+                          setStats(prev => ({ ...prev, totalProducts: Math.max(0, prev.totalProducts - 1) })); // Manual Instant Decrement
+                          
+                           // Silent Background Refresh
+                           fetch(`${BASE_URL}/api/stats`).then(s => s.json()).then(newData => setStats(newData)).catch(() => {});
                       } else {
                           const err = await res.json();
                           alert('Failed to delete product: ' + err.message);
@@ -1410,6 +1558,29 @@ const AdminDashboard = () => {
         </div>
       )}
 
+      {/* Toast Notification */}
+      {toast.show && (
+        <div style={{ position: 'fixed', bottom: '30px', right: '30px', background: toast.type === 'success' ? '#10b981' : '#ef4444', color: 'white', padding: '12px 24px', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', zIndex: 9999, animation: 'slideIn 0.3s ease', display: 'flex', alignItems: 'center', gap: '10px', minWidth: '250px' }}>
+          <div style={{ background: 'rgba(255,255,255,0.2)', borderRadius: '50%', padding: '4px', display: 'flex' }}>
+            <Bell size={20} weight="fill" />
+          </div>
+          <span style={{ fontWeight: 600 }}>{toast.message}</span>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes slideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        .spinner {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };

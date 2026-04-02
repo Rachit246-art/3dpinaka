@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Cube, Stack, Wrench, Sparkle, ShieldCheck, Truck, Headphones, Medal, ClockCounterClockwise, CreditCard, Lightning, Cpu, Eye, Thermometer, WhatsappLogo, Heart } from '@phosphor-icons/react';
 import { PRODUCTS, BRANDS } from '../constants/data';
 import { cartService } from '../services/cartService';
+import { getImageUrl } from '../utils/imageUtils';
 
 const Home = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const navigate = useNavigate();
   const revealRefs = useRef([]);
+  
+  const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
   const slides = [
     {
@@ -83,8 +86,26 @@ const Home = () => {
   };
 
   const [wishlist, setWishlist] = useState([]);
+  const [dbFeaturedProducts, setDbFeaturedProducts] = useState([]);
 
   useEffect(() => {
+    const fetchFeatured = async () => {
+        try {
+            const res = await fetch(`${BASE_URL}/api/products?featured=true&limit=4`);
+            if (res.ok) {
+                const data = await res.json();
+                // Safe state setting: only update if data exists to prevent intermittent disappearance
+                if (data && data.length > 0) {
+                    setDbFeaturedProducts(data.slice(0, 4));
+                }
+            }
+        } catch (err) {
+            console.error("Fetch featured error:", err);
+            // On error, let it fallback to static PRODUCTS automatically via the conditional render
+        }
+    };
+    fetchFeatured();
+
     const updateWishlist = () => setWishlist(cartService.getWishlistItems());
     updateWishlist();
     window.addEventListener('wishlistUpdated', updateWishlist);
@@ -145,18 +166,22 @@ const Home = () => {
       {/* Promo Banner */}
       <div className="promo-banner">
         <div className="marquee">
-          <span>✦ Best Deals</span>
-          <span>✦ Safe Transactions</span>
-          <span>✦ Fast Shipping</span>
-          <span>✦ 7 Days Return Policy</span>
-          <span>✦ Best Deals</span>
-          <span>✦ Safe Transactions</span>
-          <span>✦ Fast Shipping</span>
-          <span>✦ 7 Days Return Policy</span>
-          <span>✦ Best Deals</span>
-          <span>✦ Safe Transactions</span>
-          <span>✦ Fast Shipping</span>
-          <span>✦ 7 Days Return Policy</span>
+          <div className="marquee-content">
+            <span>✦ Best Deals</span>
+            <span>✦ Safe Transactions</span>
+            <span>✦ Fast Shipping</span>
+            <span>✦ 7 Days Return Policy</span>
+            <span>✦ Affordable Pricing</span>
+            <span>✦ 24/7 Support</span>
+          </div>
+          <div className="marquee-content">
+            <span>✦ Best Deals</span>
+            <span>✦ Safe Transactions</span>
+            <span>✦ Fast Shipping</span>
+            <span>✦ 7 Days Return Policy</span>
+            <span>✦ Affordable Pricing</span>
+            <span>✦ 24/7 Support</span>
+          </div>
         </div>
       </div>
 
@@ -206,22 +231,38 @@ const Home = () => {
         </div>
 
         <div className="products-grid">
-            {PRODUCTS.slice(0, 4).map((product, index) => (
-                <div key={product.id} className="product-card reveal" ref={addToRevealRefs}>
+            {(dbFeaturedProducts.length > 0 ? dbFeaturedProducts : PRODUCTS.slice(0, 10)).map((product, index) => (
+                <div key={product._id || product.id} className="product-card reveal" ref={addToRevealRefs}>
                     <button 
-                        className={`wishlist-btn ${wishlist.some(item => item.title === product.title) ? 'active' : ''}`} 
+                        className={`wishlist-btn ${wishlist.some(item => (item.name || item.title || '').toLowerCase() === (product.name || product.title || '').toLowerCase()) ? 'active' : ''}`} 
                         onClick={() => handleAddToWishlist(product)}
                         title="Add to Wishlist"
                     >
-                        <Heart size={20} weight={wishlist.some(item => item.title === product.title) ? "fill" : "bold"} />
+                        <Heart size={20} weight={wishlist.some(item => (item.name || item.title || '').toLowerCase() === (product.name || product.title || '').toLowerCase()) ? "fill" : "bold"} />
                     </button>
-                    <div className="badge" style={product.badgeStyle}>{product.badge || (index === 0 ? 'Best Seller' : index === 1 ? 'New Arrival' : index === 2 ? 'Popular' : 'Premium')}</div>
-                    <img src={product.image} alt={product.title} className="product-img" />
+                    {product.badge && <div className="badge" style={product.badgeStyle}>{product.badge}</div>}
+                    <Link to={product._id ? `/product/${product._id}` : '/products'} className="product-img-wrapper" style={{ display: 'block' }}>
+                        <img 
+                            src={getImageUrl(product.image)} 
+                            alt={product.name || product.title} 
+                            className="product-img" 
+                            onError={(e) => { e.target.onerror = null; e.target.src = '/fallback.png'; }}
+                        />
+                    </Link>
                     <div className="product-info">
                         <div className="product-cat">{product.category}</div>
-                        <div className="product-title">{product.title}</div>
-                        <div className="stars">{product.stars}</div>
-                        <div className="product-price">{product.price}</div>
+                        <Link to={product._id ? `/product/${product._id}` : '/products'} style={{ textDecoration: 'none', color: 'inherit' }}>
+                            <div className="product-title">{product.name || product.title}</div>
+                        </Link>
+                        <div className="stars">
+                            {typeof product.rating === 'number' ? 
+                                ('★'.repeat(Math.floor(product.rating)) + '☆'.repeat(5 - Math.floor(product.rating)) + ` (${product.rating.toFixed(1)})`) : 
+                                (product.stars || '★★★★★ (5.0)')
+                            }
+                        </div>
+                        <div className="product-price">
+                            ₹{typeof product.price === 'number' ? product.price.toLocaleString('en-IN') : product.price}
+                        </div>
                         <button 
                             className="btn btn-block" 
                             onClick={() => handleAddToCart(product)}

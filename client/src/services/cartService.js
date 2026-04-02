@@ -17,16 +17,18 @@ export const cartService = {
   
   getCartCount: () => getFromStorage('cart').length,
   
-  addToCart: (product) => {
+  addToCart: (product, quantity = 1) => {
     const cart = getFromStorage('cart');
     const title = product.name || product.title;
-    cart.push({
-      id: Date.now() + Math.random(), // Unique ID for removals
-      productId: product._id || product.id, // Original ID from data
-      title: title,
-      price: product.price,
-      image: product.image || product.img
-    });
+    for (let i = 0; i < quantity; i++) {
+        cart.push({
+          id: Date.now() + Math.random(), // Unique ID for removals
+          productId: product._id || product.id, // Original ID from data
+          title: title,
+          price: product.price,
+          image: product.image || product.img
+        });
+    }
     saveToStorage('cart', cart);
     window.dispatchEvent(new Event(CART_UPDATED));
     window.dispatchEvent(new CustomEvent(SHOW_TOAST, { 
